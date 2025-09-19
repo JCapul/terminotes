@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Iterable, Sequence
 
 import click
+import yaml
 
 from .config import (
     ConfigError,
@@ -188,35 +189,38 @@ def _parse_editor_note(raw: str) -> tuple[str, tuple[str, ...]]:
     except ValueError:
         return raw.strip(), ()
 
-    metadata = lines[1:closing_index]
-    body_lines = lines[closing_index + 1 :]
+    metadata_block = "\n".join(lines[1:closing_index])
+    body = "\n".join(lines[closing_index + 1 :]).strip()
 
     title: str | None = None
     tags: tuple[str, ...] = ()
 
-    for line in metadata:
-        if ":" not in line:
-            continue
-        key, value = line.split(":", 1)
-        key = key.strip().lower()
-        value = value.strip()
-        if key == "title":
-            title = value
-        elif key == "tags" and value.startswith("[") and value.endswith("]"):
-            inner = value[1:-1].strip()
-            if inner:
-                tags = tuple(part.strip() for part in inner.split(",") if part.strip())
+    try:
+        parsed = yaml.safe_load(metadata_block) or {}
+    except yaml.YAMLError:
+        parsed = {}
 
-    body = "\n".join(body_lines).strip()
+    if isinstance(parsed, dict):
+        title_value = parsed.get("title")
+        if isinstance(title_value, str):
+            title = title_value.strip() or None
+
+        tags_value = parsed.get("tags")
+        if isinstance(tags_value, str):
+            tags_value = [part.strip() for part in tags_value.split(",")]
+        if isinstance(tags_value, Iterable) and not isinstance(tags_value, (str, bytes)):
+            tags = tuple(
+                str(tag).strip()
+                for tag in tags_value
+                if str(tag).strip()
+            )
+
     if title:
-        if body:
-            content = f"{title}\n\n{body}"
-        else:
-            content = title
+        content = f"{title}\n\n{body}".strip()
     else:
         content = body
 
-    return content.strip(), tags
+    return content, tags
 
 
 def main(argv: Sequence[str] | None = None) -> int:
