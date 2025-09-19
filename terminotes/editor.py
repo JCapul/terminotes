@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Sequence
-
-
 DEFAULT_TEMPLATE = """---\ntitle: \ntags: []\n---\n\n"""
 
 

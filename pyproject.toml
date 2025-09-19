@@ -7,7 +7,7 @@ requires-python = ">=3.13"
 dependencies = []
 
 [project.scripts]
-qn = "terminotes.cli:main"
+tn = "terminotes.cli:main"
 terminotes = "terminotes.cli:main"
 
 [dependency-groups]
