@@ -9,6 +9,6 @@ uv sync
 uv run python -m terminotes --help
 ```
 
-Copy `config/config.sample.toml` to your configuration directory (default `~/.config/terminotes/config.toml`), set `notes_repo_url` and `notes_repo_path`, and populate `allowed_tags` before running the CLI.
+Copy `config/config.sample.toml` to your configuration directory (default `~/.config/terminotes/config.toml`), set `notes_repo_url`, and populate `allowed_tags` before running the CLI. Terminotes clones the notes repository into its config directory automatically.
 
 Use the `Justfile` shortcuts to run common workflows once the environment is bootstrapped.

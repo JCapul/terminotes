@@ -15,8 +15,22 @@ from terminotes.config import (
 
 def write_config(tmp_path: Path, content: str) -> Path:
     config_file = tmp_path / "config.toml"
+    config_file.parent.mkdir(parents=True, exist_ok=True)
     config_file.write_text(textwrap.dedent(content), encoding="utf-8")
     return config_file
+
+
+def test_repo_path_defaults_to_config_dir(tmp_path: Path) -> None:
+    config_path = write_config(
+        tmp_path / "nested",
+        """
+        notes_repo_url = "git@example:notes.git"
+        allowed_tags = []
+        """,
+    )
+
+    config = load_config(config_path)
+    assert config.repo_path.parent == (config_path.parent).expanduser().resolve()
 
 
 def test_load_config_success(tmp_path: Path) -> None:
@@ -24,7 +38,6 @@ def test_load_config_success(tmp_path: Path) -> None:
         tmp_path,
         """
         notes_repo_url = "git@example:notes.git"
-        notes_repo_path = "~/notes"
         allowed_tags = ["python", "til"]
         editor = "nvim"
         """,
@@ -33,7 +46,7 @@ def test_load_config_success(tmp_path: Path) -> None:
     config = load_config(config_path)
     assert isinstance(config, TerminotesConfig)
     assert config.notes_repo_url == "git@example:notes.git"
-    assert config.notes_repo_path == Path("~/notes")
+    assert config.repo_path.name == "notes-repo"
     assert config.allowed_tags == ("python", "til")
     assert config.editor == "nvim"
 
@@ -49,7 +62,6 @@ def test_load_config_rejects_empty_tags(tmp_path: Path) -> None:
         tmp_path,
         """
         notes_repo_url = "git@example:notes.git"
-        notes_repo_path = "~/notes"
         allowed_tags = ["python", "  "]
         """,
     )
@@ -63,7 +75,6 @@ def test_ensure_tags_known_rejects_unknown(tmp_path: Path) -> None:
         tmp_path,
         """
         notes_repo_url = "git@example:notes.git"
-        notes_repo_path = "~/notes"
         allowed_tags = ["python"]
         """,
     )
@@ -78,7 +89,6 @@ def test_ensure_tags_known_accepts_subset(tmp_path: Path) -> None:
         tmp_path,
         """
         notes_repo_url = "git@example:notes.git"
-        notes_repo_path = "~/notes"
         allowed_tags = ["python", "til"]
         """,
     )

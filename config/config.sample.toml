@@ -2,7 +2,6 @@
 # Copy this file to ~/.config/terminotes/config.toml (or pass --config) and adjust values.
 
 notes_repo_url = "git@github.com:example/terminotes-notes.git"
-notes_repo_path = "~/.local/share/terminotes/notes-repo"
 allowed_tags = ["til", "python", "cli"]
 editor = "vim"
 

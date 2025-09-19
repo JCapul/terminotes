@@ -14,6 +14,7 @@ CONFIG_FILENAMES = (
 
 DEFAULT_CONFIG_DIR = Path("~/.config/terminotes").expanduser()
 DEFAULT_CONFIG_PATH = DEFAULT_CONFIG_DIR / "config.toml"
+DEFAULT_REPO_DIRNAME = "notes-repo"
 
 
 class ConfigError(RuntimeError):
@@ -37,14 +38,14 @@ class TerminotesConfig:
     """In-memory representation of the Terminotes configuration file."""
 
     notes_repo_url: str
-    notes_repo_path: Path
+    repo_path: Path
     allowed_tags: tuple[str, ...]
     editor: str | None = None
 
     @property
     def normalized_repo_path(self) -> Path:
-        """Return the expanded and resolved repository path."""
-        return self.notes_repo_path.expanduser().resolve()
+        """Return the expanded repository path."""
+        return self.repo_path
 
 
 def load_config(path: Path | None = None) -> TerminotesConfig:
@@ -82,15 +83,9 @@ def load_config(path: Path | None = None) -> TerminotesConfig:
     except ValueError as exc:
         raise InvalidConfigError(str(exc)) from exc
 
-    try:
-        repo_path_raw = raw["notes_repo_path"]
-    except KeyError as exc:  # pragma: no cover - defensive path
-        raise InvalidConfigError("Missing 'notes_repo_path' in configuration") from exc
-
-    if not isinstance(repo_path_raw, str):
-        raise InvalidConfigError("'notes_repo_path' must be a string path")
-
-    notes_repo_path = Path(repo_path_raw)
+    base_dir = config_path.parent if path is not None else DEFAULT_CONFIG_DIR
+    config_dir = base_dir.expanduser()
+    notes_repo_path = (config_dir / DEFAULT_REPO_DIRNAME).expanduser().resolve()
 
     allowed_tags_raw: Sequence[str] | None = raw.get("allowed_tags")
     if allowed_tags_raw is None:
@@ -118,7 +113,7 @@ def load_config(path: Path | None = None) -> TerminotesConfig:
 
     return TerminotesConfig(
         notes_repo_url=notes_repo_url,
-        notes_repo_path=notes_repo_path,
+        repo_path=notes_repo_path,
         allowed_tags=allowed_tags,
         editor=editor,
     )
