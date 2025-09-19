@@ -2,9 +2,28 @@
 
 from __future__ import annotations
 
+import click
+
 DEFAULT_TEMPLATE = """---\ntitle: \ntags: []\n---\n\n"""
 
 
-def open_editor(initial_content: str = DEFAULT_TEMPLATE) -> str:
-    """Placeholder for opening the configured editor and returning note content."""
-    raise NotImplementedError("Editor integration pending implementation.")
+class EditorError(RuntimeError):
+    """Raised when the external editor fails or returns no note content."""
+
+
+def open_editor(initial_content: str = DEFAULT_TEMPLATE, editor: str | None = None) -> str:
+    """Launch the configured editor using Click and return captured content."""
+
+    try:
+        content = click.edit(text=initial_content, editor=editor)
+    except OSError as exc:  # pragma: no cover - depends on system configuration
+        raise EditorError(f"Failed to launch editor '{editor or ''}'.") from exc
+
+    if content is None:
+        raise EditorError("Note capture aborted: editor closed without saving.")
+
+    content = content.strip()
+    if not content:
+        raise EditorError("Note capture aborted: editor returned empty content.")
+
+    return content
