@@ -1,0 +1,32 @@
+[project]
+name = "terminotes"
+version = "0.1.0"
+description = "Terminal-first notes CLI with SQLite storage and git sync."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = []
+
+[project.scripts]
+qn = "terminotes.cli:main"
+terminotes = "terminotes.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+package = true
+
+[tool.ruff]
+line-length = 88
+src = ["terminotes", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+
