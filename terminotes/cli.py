@@ -191,6 +191,36 @@ def search(ctx: click.Context, pattern: str) -> None:  # pragma: no cover
     click.echo(f"Subcommand 'search' is not implemented yet (pattern: {pattern}).")
 
 
+@cli.command()
+@click.pass_context
+def info(ctx: click.Context) -> None:
+    """Display repository information and current configuration."""
+
+    config: TerminotesConfig = ctx.obj["config"]
+    storage: Storage = ctx.obj["storage"]
+
+    db_path = storage.path
+    total_notes = storage.count_notes()
+
+    try:
+        last_note = storage.fetch_last_updated_note()
+        last_title, _ = _split_content(last_note.content)
+        last_title_display = last_title or "(title inferred from body)"
+        last_id = last_note.note_id
+    except StorageError:
+        last_title_display = "(none)"
+        last_id = "-"
+
+    config_dump = _format_config(config)
+
+    click.echo("Terminotes repository info:\n")
+    click.echo(f"  Database file : {db_path}")
+    click.echo(f"  Total notes   : {total_notes}")
+    click.echo(f"  Last edited   : {last_id} – {last_title_display}")
+    click.echo("\nConfiguration:\n")
+    click.echo(config_dump)
+
+
 def _load_configuration(
     path: Path | None = None,
     *,
@@ -330,6 +360,24 @@ def _perform_backup(ctx: click.Context, storage: Storage) -> None:
         backup.backup(storage.path)
     except BackupError as exc:
         raise TerminotesCliError(str(exc)) from exc
+
+
+def _format_config(config: TerminotesConfig) -> str:
+    data: dict[str, Any] = {
+        "repo_path": str(config.repo_path),
+        "allowed_tags": list(config.allowed_tags),
+        "editor": config.editor,
+    }
+    if config.backup is None:
+        data["backup"] = {"enabled": False}
+    else:
+        data["backup"] = {
+            "enabled": config.backup.enabled,
+            "type": config.backup.kind,
+            "repo_url": config.backup.repo_url,
+        }
+
+    return yaml.safe_dump(data, sort_keys=False).strip()
 
 
 def _bootstrap_config_file(path: Path) -> bool:

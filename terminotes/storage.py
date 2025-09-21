@@ -164,6 +164,12 @@ class Storage:
 
         return self._row_to_note(row)
 
+    def count_notes(self) -> int:
+        with self._connection() as conn:
+            cursor = conn.execute("SELECT COUNT(*) FROM notes")
+            (count,) = cursor.fetchone()
+        return int(count)
+
     def search_notes(self, pattern: str) -> Iterable[Note]:
         raise NotImplementedError("Search pending implementation.")
 

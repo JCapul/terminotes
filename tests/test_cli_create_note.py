@@ -257,3 +257,24 @@ def test_new_command_without_backup(tmp_path, monkeypatch) -> None:
     content, tags = _read_single_note(repo_dir / DB_FILENAME)
     assert content == "No Backup\n\nBody."
     assert tags == ()
+
+
+def test_info_command_displays_repo_and_config(tmp_path, monkeypatch, capsys) -> None:
+    config_path = _write_config(tmp_path)
+    repo_dir = tmp_path / "notes-repo"
+    _set_default_paths(config_path, monkeypatch)
+    monkeypatch.setattr(GitSync, "ensure_local_clone", lambda self: None)
+
+    storage = Storage(repo_dir / DB_FILENAME)
+    storage.initialize()
+    storage.create_note("Info title\n\nInfo body", ["til"])
+
+    runner = CliRunner()
+    result = runner.invoke(cli.cli, ["info"])
+
+    assert result.exit_code == 0, result.output
+    output = result.output
+    assert "Database file" in output
+    assert "Total notes" in output
+    assert "Last edited" in output
+    assert "backup:" in output
