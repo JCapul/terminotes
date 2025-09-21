@@ -24,8 +24,11 @@ def test_repo_path_defaults_to_config_dir(tmp_path: Path) -> None:
     config_path = write_config(
         tmp_path / "nested",
         """
-        notes_repo_url = "git@example:notes.git"
         allowed_tags = []
+        [backup]
+        enabled = true
+        type = "git"
+        repo_url = "git@example:notes.git"
         """,
     )
 
@@ -38,18 +41,22 @@ def test_load_config_success(tmp_path: Path) -> None:
     config_path = write_config(
         tmp_path,
         """
-        notes_repo_url = "git@example:notes.git"
         allowed_tags = ["python", "til"]
         editor = "nvim"
+        [backup]
+        enabled = true
+        type = "git"
+        repo_url = "git@example:notes.git"
         """,
     )
 
     config = load_config(config_path)
     assert isinstance(config, TerminotesConfig)
-    assert config.notes_repo_url == "git@example:notes.git"
     assert config.repo_path.name == "notes-repo"
     assert config.allowed_tags == ("python", "til")
     assert config.editor == "nvim"
+    assert config.backup is not None
+    assert config.backup.repo_url == "git@example:notes.git"
     assert config.source_path == config_path
 
 
@@ -63,8 +70,11 @@ def test_load_config_rejects_empty_tags(tmp_path: Path) -> None:
     config_path = write_config(
         tmp_path,
         """
-        notes_repo_url = "git@example:notes.git"
         allowed_tags = ["python", "  "]
+        [backup]
+        enabled = true
+        type = "git"
+        repo_url = "git@example:notes.git"
         """,
     )
 
@@ -76,8 +86,11 @@ def test_ensure_tags_known_rejects_unknown(tmp_path: Path) -> None:
     config_path = write_config(
         tmp_path,
         """
-        notes_repo_url = "git@example:notes.git"
         allowed_tags = ["python"]
+        [backup]
+        enabled = true
+        type = "git"
+        repo_url = "git@example:notes.git"
         """,
     )
     config = load_config(config_path)
@@ -90,10 +103,25 @@ def test_ensure_tags_known_accepts_subset(tmp_path: Path) -> None:
     config_path = write_config(
         tmp_path,
         """
-        notes_repo_url = "git@example:notes.git"
         allowed_tags = ["python", "til"]
+        [backup]
+        enabled = true
+        type = "git"
+        repo_url = "git@example:notes.git"
         """,
     )
     config = load_config(config_path)
 
     ensure_tags_known(config, ["python"])
+
+
+def test_backup_optional(tmp_path: Path) -> None:
+    config_path = write_config(
+        tmp_path,
+        """
+        allowed_tags = []
+        """,
+    )
+
+    config = load_config(config_path)
+    assert config.backup is None

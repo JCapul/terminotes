@@ -10,6 +10,7 @@ from typing import Any, Iterable, Sequence
 import click
 import yaml
 
+from .backup import BackupError, BackupProvider, GitBackup
 from .config import (
     DEFAULT_CONFIG_PATH,
     ConfigError,
@@ -20,7 +21,7 @@ from .config import (
     load_config,
 )
 from .editor import EditorError, open_editor
-from .git_sync import GitSync, GitSyncError
+from .git_sync import GitSync
 from .storage import DB_FILENAME, Storage, StorageError
 
 
@@ -62,14 +63,14 @@ def cli(ctx: click.Context) -> None:
         return
 
     config_obj = _load_configuration(allow_create=False, missing_hint=True)
-    git_sync = GitSync(config_obj.normalized_repo_path, config_obj.notes_repo_url)
-    _ensure_clone(git_sync)
-
     storage = Storage(config_obj.normalized_repo_path / DB_FILENAME)
     _initialize_storage(storage)
 
+    backup = _initialize_backup(config_obj)
+
     ctx.obj["config"] = config_obj
     ctx.obj["storage"] = storage
+    ctx.obj["backup"] = backup
 
 
 @cli.command()
@@ -98,6 +99,8 @@ def new(ctx: click.Context) -> None:
         note = storage.create_note(parsed.content, final_tags)
     except StorageError as exc:
         raise TerminotesCliError(str(exc)) from exc
+
+    _perform_backup(ctx, storage)
 
     click.echo(f"Created note {note.note_id}")
 
@@ -140,6 +143,8 @@ def edit(ctx: click.Context, note_id: str | None) -> None:
         updated = storage.update_note(note_id, parsed.content, final_tags)
     except StorageError as exc:
         raise TerminotesCliError(str(exc)) from exc
+
+    _perform_backup(ctx, storage)
 
     click.echo(f"Updated note {updated.note_id}")
 
@@ -207,18 +212,31 @@ def _load_configuration(
         raise TerminotesCliError(str(exc)) from exc
 
 
-def _ensure_clone(git_sync: GitSync) -> None:
-    try:
-        git_sync.ensure_local_clone()
-    except GitSyncError as exc:
-        raise TerminotesCliError(str(exc)) from exc
-
-
 def _initialize_storage(storage: Storage) -> None:
     try:
         storage.initialize()
     except StorageError as exc:
         raise TerminotesCliError(str(exc)) from exc
+
+
+def _initialize_backup(config: TerminotesConfig) -> BackupProvider | None:
+    settings = config.backup
+    if settings is None or not settings.enabled:
+        return None
+
+    if settings.kind != "git":
+        raise TerminotesCliError(f"Unsupported backup type '{settings.kind}'")
+
+    if settings.repo_url is None:
+        raise TerminotesCliError("Git backup requires a 'repo_url'.")
+
+    git_sync = GitSync(config.normalized_repo_path, settings.repo_url)
+    backup = GitBackup(git_sync)
+    try:
+        backup.prepare()
+    except BackupError as exc:
+        raise TerminotesCliError(str(exc)) from exc
+    return backup
 
 
 def ensure_tags_known_or_die(config: TerminotesConfig, tags: Iterable[str]) -> None:
@@ -304,15 +322,29 @@ def _current_timestamp() -> str:
     return datetime.now(tz=timezone.utc).isoformat()
 
 
+def _perform_backup(ctx: click.Context, storage: Storage) -> None:
+    backup: BackupProvider | None = ctx.obj.get("backup")
+    if backup is None:
+        return
+    try:
+        backup.backup(storage.path)
+    except BackupError as exc:
+        raise TerminotesCliError(str(exc)) from exc
+
+
 def _bootstrap_config_file(path: Path) -> bool:
     if path.exists():
         return False
 
     path.parent.mkdir(parents=True, exist_ok=True)
     default_content = (
-        'notes_repo_url = "git@github.com:example/terminotes-notes.git"\n'
         "allowed_tags = []\n"
         'editor = "vim"\n'
+        "\n"
+        "[backup]\n"
+        "enabled = true\n"
+        'type = "git"\n'
+        'repo_url = "git@github.com:example/terminotes-notes.git"\n'
     )
     path.write_text(default_content, encoding="utf-8")
     return True

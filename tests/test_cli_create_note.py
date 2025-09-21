@@ -16,14 +16,21 @@ from terminotes.git_sync import GitSync
 from terminotes.storage import DB_FILENAME, Storage
 
 
-def _write_config(base_dir: Path) -> Path:
+def _write_config(base_dir: Path, *, backup_enabled: bool = True) -> Path:
     config_path = base_dir / "config.toml"
+    backup_block = (
+        "\n[backup]\n"
+        f"enabled = {'true' if backup_enabled else 'false'}\n"
+        'type = "git"\n'
+        'repo_url = "file:///tmp/terminotes-notes.git"\n'
+    ) if backup_enabled else "\n[backup]\nenabled = false\n"
+
     config_path.write_text(
-        """
-notes_repo_url = "file:///tmp/terminotes-notes.git"
-allowed_tags = ["til", "python"]
-editor = "cat"
-        """.strip(),
+        (
+            "allowed_tags = [\"til\", \"python\"]\n"
+            'editor = "cat"\n'
+            f"{backup_block}"
+        ).strip(),
         encoding="utf-8",
     )
     repo_dir = base_dir / "notes-repo"
@@ -216,3 +223,37 @@ def test_config_command_bootstraps_when_missing(tmp_path, monkeypatch) -> None:
     assert result.exit_code == 0, result.output
     assert edited_paths == [str(config_path)]
     assert config_path.exists()
+
+
+def test_new_command_without_backup(tmp_path, monkeypatch) -> None:
+    config_path = _write_config(tmp_path, backup_enabled=False)
+    repo_dir = tmp_path / "notes-repo"
+    _set_default_paths(config_path, monkeypatch)
+
+    class ShouldNotRunGit(GitSync):
+        def __init__(self, *args, **kwargs):  # pragma: no cover - defensive
+            raise AssertionError("GitSync should not be instantiated when backup is disabled")
+
+    monkeypatch.setattr(cli, "GitSync", ShouldNotRunGit)
+
+    def fake_editor(template: str, editor: str | None = None) -> str:
+        return (
+            "---\n"
+            "title: No Backup\n"
+            "last_edited: 2024-01-01T00:00:00+00:00\n"
+            "date: 2024-01-01T00:00:00+00:00\n"
+            "tags: []\n"
+            "---\n\n"
+            "Body.\n"
+        )
+
+    monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
+
+    runner = CliRunner()
+    result = runner.invoke(cli.cli, ["new"])
+
+    assert result.exit_code == 0, result.output
+
+    content, tags = _read_single_note(repo_dir / DB_FILENAME)
+    assert content == "No Backup\n\nBody."
+    assert tags == ()
