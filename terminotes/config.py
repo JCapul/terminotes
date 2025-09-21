@@ -41,6 +41,7 @@ class TerminotesConfig:
     repo_path: Path
     allowed_tags: tuple[str, ...]
     editor: str | None = None
+    source_path: Path | None = None
 
     @property
     def normalized_repo_path(self) -> Path:
@@ -116,6 +117,7 @@ def load_config(path: Path | None = None) -> TerminotesConfig:
         repo_path=notes_repo_path,
         allowed_tags=allowed_tags,
         editor=editor,
+        source_path=config_path,
     )
 
 

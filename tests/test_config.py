@@ -31,6 +31,7 @@ def test_repo_path_defaults_to_config_dir(tmp_path: Path) -> None:
 
     config = load_config(config_path)
     assert config.repo_path.parent == (config_path.parent).expanduser().resolve()
+    assert config.source_path == config_path
 
 
 def test_load_config_success(tmp_path: Path) -> None:
@@ -49,6 +50,7 @@ def test_load_config_success(tmp_path: Path) -> None:
     assert config.repo_path.name == "notes-repo"
     assert config.allowed_tags == ("python", "til")
     assert config.editor == "nvim"
+    assert config.source_path == config_path
 
 
 def test_load_config_missing_file(tmp_path: Path) -> None:

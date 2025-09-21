@@ -22,6 +22,7 @@ class Note:
     content: str
     tags: tuple[str, ...]
     created_at: datetime
+    updated_at: datetime
 
 
 class StorageError(RuntimeError):
@@ -52,10 +53,12 @@ class Storage:
                     note_id TEXT PRIMARY KEY,
                     content TEXT NOT NULL,
                     tags TEXT NOT NULL,
-                    created_at TEXT NOT NULL
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
                 )
                 """
             )
+            self._ensure_columns(conn)
 
     # ------------------------------------------------------------------
     # Note operations
@@ -69,14 +72,24 @@ class Storage:
 
         normalized_tags = tuple(tags)
         created_at = datetime.now(tz=timezone.utc)
+        updated_at = created_at
         note_id = self._generate_note_id(created_at)
         encoded_tags = json.dumps(list(normalized_tags))
 
         with self._connection() as conn:
             try:
                 conn.execute(
-                    "INSERT INTO notes (note_id, content, tags, created_at) VALUES (?, ?, ?, ?)",
-                    (note_id, content, encoded_tags, created_at.isoformat()),
+                    """
+                    INSERT INTO notes (note_id, content, tags, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        note_id,
+                        content,
+                        encoded_tags,
+                        created_at.isoformat(),
+                        updated_at.isoformat(),
+                    ),
                 )
             except sqlite3.DatabaseError as exc:  # pragma: no cover - defensive
                 raise StorageError(f"Failed to insert note: {exc}") from exc
@@ -86,16 +99,70 @@ class Storage:
             content=content,
             tags=normalized_tags,
             created_at=created_at,
+            updated_at=updated_at,
         )
 
     def list_notes(self, limit: int = 10) -> Iterable[Note]:
         raise NotImplementedError("Listing notes pending implementation.")
 
     def fetch_note(self, note_id: str) -> Note:
-        raise NotImplementedError("Fetching notes pending implementation.")
+        with self._connection() as conn:
+            cursor = conn.execute(
+                "SELECT note_id, content, tags, created_at, updated_at FROM notes WHERE note_id = ?",
+                (note_id,),
+            )
+            row = cursor.fetchone()
+        if row is None:
+            raise StorageError(f"Note '{note_id}' not found.")
+        return self._row_to_note(row)
 
     def update_note(self, note_id: str, content: str, tags: Sequence[str]) -> Note:
-        raise NotImplementedError("Updating notes pending implementation.")
+        content = content.rstrip()
+        if not content:
+            raise StorageError("Cannot update note with empty content.")
+
+        updated_at = datetime.now(tz=timezone.utc)
+        encoded_tags = json.dumps(list(tags))
+
+        with self._connection() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE notes
+                SET content = ?, tags = ?, updated_at = ?
+                WHERE note_id = ?
+                """,
+                (content, encoded_tags, updated_at.isoformat(), note_id),
+            )
+            if cursor.rowcount == 0:
+                raise StorageError(f"Note '{note_id}' not found.")
+
+            cursor = conn.execute(
+                "SELECT note_id, content, tags, created_at, updated_at FROM notes WHERE note_id = ?",
+                (note_id,),
+            )
+            row = cursor.fetchone()
+
+        if row is None:  # pragma: no cover - defensive
+            raise StorageError(f"Note '{note_id}' not found after update.")
+
+        return self._row_to_note(row)
+
+    def fetch_last_updated_note(self) -> Note:
+        with self._connection() as conn:
+            cursor = conn.execute(
+                """
+                SELECT note_id, content, tags, created_at, updated_at
+                FROM notes
+                ORDER BY updated_at DESC
+                LIMIT 1
+                """
+            )
+            row = cursor.fetchone()
+
+        if row is None:
+            raise StorageError("No notes available.")
+
+        return self._row_to_note(row)
 
     def search_notes(self, pattern: str) -> Iterable[Note]:
         raise NotImplementedError("Search pending implementation.")
@@ -120,3 +187,27 @@ class Storage:
         """
 
         return created_at.strftime("%Y%m%d%H%M%S%f")
+
+    def _ensure_columns(self, conn: sqlite3.Connection) -> None:
+        columns = {
+            row[1]
+            for row in conn.execute("PRAGMA table_info(notes)")
+        }
+        if "updated_at" not in columns:
+            conn.execute("ALTER TABLE notes ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''")
+            conn.execute("UPDATE notes SET updated_at = created_at WHERE updated_at = ''")
+
+    def _row_to_note(self, row: sqlite3.Row | Sequence[str]) -> Note:
+        note_id, content, tags_raw, created_at_raw, updated_at_raw = row
+        try:
+            tags = tuple(json.loads(tags_raw))
+        except json.JSONDecodeError as exc:  # pragma: no cover - defensive
+            raise StorageError("Stored tags payload is corrupted.") from exc
+
+        return Note(
+            note_id=note_id,
+            content=content,
+            tags=tags,
+            created_at=datetime.fromisoformat(created_at_raw),
+            updated_at=datetime.fromisoformat(updated_at_raw),
+        )
