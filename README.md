@@ -1,6 +1,6 @@
 # Terminotes
 
-Terminotes is a terminal-first note taking CLI focused on fast capture with tags, SQLite persistence, and an optional backup mechanism. The default provider mirrors the SQLite database into a git repository, but the architecture allows other backup strategies to slot in later.
+Terminotes is a terminal-first note taking CLI focused on fast capture with tags, SQLite persistence, and optional git synchronization. Point Terminotes at a remote repository and it keeps the SQLite database in sync; if you skip the git URL it runs entirely locally.
 
 ## Getting Started
 
@@ -9,6 +9,6 @@ uv sync
 uv run python -m terminotes --help
 ```
 
-Run `uv run python -m terminotes config` once to bootstrap `~/.config/terminotes/config.toml`, then customise the file. Enable the default Git backup by providing a `backup.repo_url`, or disable the backup block entirely if you prefer to manage persistence locally.
+Run `uv run python -m terminotes config` once to bootstrap `~/.config/terminotes/config.toml`, then customise the file. Set `notes_repo_url` to enable git sync or leave it blank to keep notes purely local.
 
 Use the `Justfile` shortcuts to run common workflows once the environment is bootstrapped.

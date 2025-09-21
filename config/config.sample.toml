@@ -1,10 +1,6 @@
 # Terminotes configuration sample
 # Copy this file to ~/.config/terminotes/config.toml and adjust values.
 
+notes_repo_url = "git@github.com:example/terminotes-notes.git"  # Leave blank to disable git sync
 allowed_tags = ["til", "python", "cli"]
 editor = "vim"
-
-[backup]
-enabled = true
-type = "git"
-repo_url = "git@github.com:example/terminotes-notes.git"

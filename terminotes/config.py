@@ -34,22 +34,13 @@ class InvalidConfigError(ConfigError):
 
 
 @dataclass(slots=True)
-class BackupConfig:
-    """Settings for a backup mechanism."""
-
-    enabled: bool
-    kind: str
-    repo_url: str | None = None
-
-
-@dataclass(slots=True)
 class TerminotesConfig:
     """In-memory representation of the Terminotes configuration file."""
 
+    notes_repo_url: str | None
     repo_path: Path
     allowed_tags: tuple[str, ...]
     editor: str | None = None
-    backup: BackupConfig | None = None
     source_path: Path | None = None
 
     @property
@@ -86,6 +77,15 @@ def load_config(path: Path | None = None) -> TerminotesConfig:
     config_dir = base_dir.expanduser()
     notes_repo_path = (config_dir / DEFAULT_REPO_DIRNAME).expanduser().resolve()
 
+    notes_repo_url_raw = raw.get("notes_repo_url")
+    if notes_repo_url_raw is None:
+        notes_repo_url: str | None = None
+    elif isinstance(notes_repo_url_raw, str):
+        notes_repo_url_clean = notes_repo_url_raw.strip()
+        notes_repo_url = notes_repo_url_clean or None
+    else:
+        raise InvalidConfigError("'notes_repo_url' must be a string when provided")
+
     allowed_tags_raw: Sequence[str] | None = raw.get("allowed_tags")
     if allowed_tags_raw is None:
         allowed_tags: tuple[str, ...] = ()
@@ -110,39 +110,11 @@ def load_config(path: Path | None = None) -> TerminotesConfig:
     if editor is not None and not isinstance(editor, str):
         raise InvalidConfigError("'editor' must be a string when provided")
 
-    backup_raw = raw.get("backup")
-    backup: BackupConfig | None
-    if backup_raw is None:
-        backup = None
-    else:
-        if not isinstance(backup_raw, dict):
-            raise InvalidConfigError("'backup' must be a table of settings")
-
-        enabled = bool(backup_raw.get("enabled", True))
-        kind = backup_raw.get("type", "git")
-        if not isinstance(kind, str) or not kind.strip():
-            raise InvalidConfigError("'backup.type' must be a non-empty string")
-        kind = kind.strip()
-
-        repo_url_raw = backup_raw.get("repo_url")
-        repo_url: str | None
-        if repo_url_raw is None:
-            repo_url = None
-        elif isinstance(repo_url_raw, str):
-            repo_url = repo_url_raw.strip() or None
-        else:
-            raise InvalidConfigError("'backup.repo_url' must be a string when provided")
-
-        if enabled and kind == "git" and not repo_url:
-            raise InvalidConfigError("'backup.repo_url' must be set when using git backup")
-
-        backup = BackupConfig(enabled=enabled, kind=kind, repo_url=repo_url)
-
     return TerminotesConfig(
+        notes_repo_url=notes_repo_url,
         repo_path=notes_repo_path,
         allowed_tags=allowed_tags,
         editor=editor,
-        backup=backup,
         source_path=config_path,
     )
 

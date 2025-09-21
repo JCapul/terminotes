@@ -10,7 +10,6 @@ from typing import Any, Iterable, Sequence
 import click
 import yaml
 
-from .backup import BackupError, BackupProvider, GitBackup
 from .config import (
     DEFAULT_CONFIG_PATH,
     ConfigError,
@@ -21,7 +20,7 @@ from .config import (
     load_config,
 )
 from .editor import EditorError, open_editor
-from .git_sync import GitSync
+from .git_sync import GitSync, GitSyncError
 from .storage import DB_FILENAME, Storage, StorageError
 
 
@@ -66,11 +65,11 @@ def cli(ctx: click.Context) -> None:
     storage = Storage(config_obj.normalized_repo_path / DB_FILENAME)
     _initialize_storage(storage)
 
-    backup = _initialize_backup(config_obj)
+    git_sync = _initialize_git_sync(config_obj)
 
     ctx.obj["config"] = config_obj
     ctx.obj["storage"] = storage
-    ctx.obj["backup"] = backup
+    ctx.obj["git_sync"] = git_sync
 
 
 @cli.command()
@@ -99,8 +98,6 @@ def new(ctx: click.Context) -> None:
         note = storage.create_note(parsed.content, final_tags)
     except StorageError as exc:
         raise TerminotesCliError(str(exc)) from exc
-
-    _perform_backup(ctx, storage)
 
     click.echo(f"Created note {note.note_id}")
 
@@ -143,8 +140,6 @@ def edit(ctx: click.Context, note_id: str | None) -> None:
         updated = storage.update_note(note_id, parsed.content, final_tags)
     except StorageError as exc:
         raise TerminotesCliError(str(exc)) from exc
-
-    _perform_backup(ctx, storage)
 
     click.echo(f"Updated note {updated.note_id}")
 
@@ -249,24 +244,16 @@ def _initialize_storage(storage: Storage) -> None:
         raise TerminotesCliError(str(exc)) from exc
 
 
-def _initialize_backup(config: TerminotesConfig) -> BackupProvider | None:
-    settings = config.backup
-    if settings is None or not settings.enabled:
+def _initialize_git_sync(config: TerminotesConfig) -> GitSync | None:
+    if not config.notes_repo_url:
         return None
 
-    if settings.kind != "git":
-        raise TerminotesCliError(f"Unsupported backup type '{settings.kind}'")
-
-    if settings.repo_url is None:
-        raise TerminotesCliError("Git backup requires a 'repo_url'.")
-
-    git_sync = GitSync(config.normalized_repo_path, settings.repo_url)
-    backup = GitBackup(git_sync)
+    git_sync = GitSync(config.normalized_repo_path, config.notes_repo_url)
     try:
-        backup.prepare()
-    except BackupError as exc:
+        git_sync.ensure_local_clone()
+    except GitSyncError as exc:
         raise TerminotesCliError(str(exc)) from exc
-    return backup
+    return git_sync
 
 
 def ensure_tags_known_or_die(config: TerminotesConfig, tags: Iterable[str]) -> None:
@@ -352,30 +339,13 @@ def _current_timestamp() -> str:
     return datetime.now(tz=timezone.utc).isoformat()
 
 
-def _perform_backup(ctx: click.Context, storage: Storage) -> None:
-    backup: BackupProvider | None = ctx.obj.get("backup")
-    if backup is None:
-        return
-    try:
-        backup.backup(storage.path)
-    except BackupError as exc:
-        raise TerminotesCliError(str(exc)) from exc
-
-
 def _format_config(config: TerminotesConfig) -> str:
     data: dict[str, Any] = {
+        "notes_repo_url": config.notes_repo_url,
         "repo_path": str(config.repo_path),
         "allowed_tags": list(config.allowed_tags),
         "editor": config.editor,
     }
-    if config.backup is None:
-        data["backup"] = {"enabled": False}
-    else:
-        data["backup"] = {
-            "enabled": config.backup.enabled,
-            "type": config.backup.kind,
-            "repo_url": config.backup.repo_url,
-        }
 
     return yaml.safe_dump(data, sort_keys=False).strip()
 
@@ -386,13 +356,9 @@ def _bootstrap_config_file(path: Path) -> bool:
 
     path.parent.mkdir(parents=True, exist_ok=True)
     default_content = (
+        'notes_repo_url = ""\n'
         "allowed_tags = []\n"
         'editor = "vim"\n'
-        "\n"
-        "[backup]\n"
-        "enabled = true\n"
-        'type = "git"\n'
-        'repo_url = "git@github.com:example/terminotes-notes.git"\n'
     )
     path.write_text(default_content, encoding="utf-8")
     return True

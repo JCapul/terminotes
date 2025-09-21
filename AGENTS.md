@@ -1,9 +1,9 @@
 # Repository Guidelines
 
-Terminotes is a Python CLI for jotting quick notes from the terminal. Notes live in SQLite, and optional backup providers (git by default) keep the database safe. This guide keeps contributors aligned as the first release ships.
+Terminotes is a Python CLI for jotting quick notes from the terminal. Notes live in SQLite, and optional git synchronization keeps the database portable when configured. This guide keeps contributors aligned as the first release ships.
 
 ## Project Structure & Module Organization
-- Place runtime code under `terminotes/`, grouping modules by concern (`cli.py` for argument parsing, `editor.py` for editor launch, `storage.py` for SQLite, `backup.py` for backup orchestration, `git_sync.py` for the Git-backed provider).
+- Place runtime code under `terminotes/`, grouping modules by concern (`cli.py` for argument parsing, `editor.py` for editor launch, `storage.py` for SQLite, `git_sync.py` for git sync duties).
 - Keep shared helpers in `terminotes/utils/` when logic spans modules.
 - Store tests in `tests/`, mirroring the module layout (`tests/test_cli.py`, `tests/test_storage.py`).
 - Keep documentation in `docs/` and configuration samples (tags, templates, repo settings) in `config/`.
@@ -33,7 +33,6 @@ Terminotes is a Python CLI for jotting quick notes from the terminal. Notes live
 
 ## Security & Configuration Tips
 - Keep secrets in `.env.local`; provide safe defaults in `.env.example` and ignore the former in git.
-- Configuration can enable a backup provider. The default Git provider needs a remote URL and will bootstrap the clone on first run, but the CLI must operate gracefully when backups are disabled.
-- Ensure backup hooks run after each mutation; surface provider failures with actionable messaging.
-- When the Git provider is active, rely on external git credentials and avoid prompting inside the CLI; report failures clearly.
+- Configuration can include a `notes_repo_url`. When provided, the CLI ensures the git clone exists and future stages will handle commits/pushes; when omitted, Terminotes operates entirely locally.
+- Ensure git sync errors surface actionable messaging and avoid prompting inside the CLI; rely on external credentials.
 - Validate tag configuration before use and parameterize SQL queries.

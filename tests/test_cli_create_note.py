@@ -16,20 +16,18 @@ from terminotes.git_sync import GitSync
 from terminotes.storage import DB_FILENAME, Storage
 
 
-def _write_config(base_dir: Path, *, backup_enabled: bool = True) -> Path:
+def _write_config(base_dir: Path, *, git_enabled: bool = True) -> Path:
     config_path = base_dir / "config.toml"
-    backup_block = (
-        "\n[backup]\n"
-        f"enabled = {'true' if backup_enabled else 'false'}\n"
-        'type = "git"\n'
-        'repo_url = "file:///tmp/terminotes-notes.git"\n'
-    ) if backup_enabled else "\n[backup]\nenabled = false\n"
-
+    repo_url_line = (
+        'notes_repo_url = "file:///tmp/terminotes-notes.git"\n'
+        if git_enabled
+        else 'notes_repo_url = ""\n'
+    )
     config_path.write_text(
         (
+            f"{repo_url_line}"
             "allowed_tags = [\"til\", \"python\"]\n"
             'editor = "cat"\n'
-            f"{backup_block}"
         ).strip(),
         encoding="utf-8",
     )
@@ -225,14 +223,14 @@ def test_config_command_bootstraps_when_missing(tmp_path, monkeypatch) -> None:
     assert config_path.exists()
 
 
-def test_new_command_without_backup(tmp_path, monkeypatch) -> None:
-    config_path = _write_config(tmp_path, backup_enabled=False)
+def test_new_command_without_git_sync(tmp_path, monkeypatch) -> None:
+    config_path = _write_config(tmp_path, git_enabled=False)
     repo_dir = tmp_path / "notes-repo"
     _set_default_paths(config_path, monkeypatch)
 
     class ShouldNotRunGit(GitSync):
         def __init__(self, *args, **kwargs):  # pragma: no cover - defensive
-            raise AssertionError("GitSync should not be instantiated when backup is disabled")
+            raise AssertionError("GitSync should not be instantiated when git sync is disabled")
 
     monkeypatch.setattr(cli, "GitSync", ShouldNotRunGit)
 
@@ -277,4 +275,4 @@ def test_info_command_displays_repo_and_config(tmp_path, monkeypatch, capsys) ->
     assert "Database file" in output
     assert "Total notes" in output
     assert "Last edited" in output
-    assert "backup:" in output
+    assert "notes_repo_url" in output
