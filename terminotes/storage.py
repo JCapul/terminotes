@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Iterable, Iterator, Sequence
 
 DB_FILENAME = "terminotes.sqlite3"
-SELECT_COLUMNS = "note_id, content, tags, created_at, updated_at"
+SELECT_COLUMNS = "id, content, tags, created_at, updated_at"
 TABLE_NOTES = "notes"
 
 
@@ -19,7 +19,7 @@ TABLE_NOTES = "notes"
 class Note:
     """Representation of a stored note."""
 
-    note_id: str
+    id: int
     content: str
     tags: tuple[str, ...]
     created_at: datetime
@@ -51,7 +51,7 @@ class Storage:
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS notes (
-                    note_id TEXT PRIMARY KEY,
+                    id INTEGER PRIMARY KEY,
                     content TEXT NOT NULL,
                     tags TEXT NOT NULL,
                     created_at TEXT NOT NULL,
@@ -74,18 +74,16 @@ class Storage:
         normalized_tags = tuple(tags)
         created_at = datetime.now(tz=timezone.utc)
         updated_at = created_at
-        note_id = self._generate_note_id(created_at)
         encoded_tags = json.dumps(list(normalized_tags))
 
         with self._connection() as conn:
             try:
-                conn.execute(
+                cursor = conn.execute(
                     """
-                    INSERT INTO notes (note_id, content, tags, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?)
+                    INSERT INTO notes (content, tags, created_at, updated_at)
+                    VALUES (?, ?, ?, ?)
                     """,
                     (
-                        note_id,
                         content,
                         encoded_tags,
                         created_at.isoformat(),
@@ -96,7 +94,7 @@ class Storage:
                 raise StorageError(f"Failed to insert note: {exc}") from exc
 
         return Note(
-            note_id=note_id,
+            id=int(cursor.lastrowid),
             content=content,
             tags=normalized_tags,
             created_at=created_at,
@@ -106,18 +104,18 @@ class Storage:
     def list_notes(self, limit: int = 10) -> Iterable[Note]:
         raise NotImplementedError("Listing notes pending implementation.")
 
-    def fetch_note(self, note_id: str) -> Note:
+    def fetch_note(self, note_id: int) -> Note:
         with self._connection() as conn:
             cursor = conn.execute(
-                (f"SELECT {SELECT_COLUMNS} FROM {TABLE_NOTES} WHERE note_id = ?"),
-                (note_id,),
+                (f"SELECT {SELECT_COLUMNS} FROM {TABLE_NOTES} WHERE id = ?"),
+                (int(note_id),),
             )
             row = cursor.fetchone()
         if row is None:
             raise StorageError(f"Note '{note_id}' not found.")
         return self._row_to_note(row)
 
-    def update_note(self, note_id: str, content: str, tags: Sequence[str]) -> Note:
+    def update_note(self, note_id: int, content: str, tags: Sequence[str]) -> Note:
         content = content.rstrip()
         if not content:
             raise StorageError("Cannot update note with empty content.")
@@ -130,16 +128,16 @@ class Storage:
                 """
                 UPDATE notes
                 SET content = ?, tags = ?, updated_at = ?
-                WHERE note_id = ?
+                WHERE id = ?
                 """,
-                (content, encoded_tags, updated_at.isoformat(), note_id),
+                (content, encoded_tags, updated_at.isoformat(), int(note_id)),
             )
             if cursor.rowcount == 0:
                 raise StorageError(f"Note '{note_id}' not found.")
 
             cursor = conn.execute(
-                (f"SELECT {SELECT_COLUMNS} FROM {TABLE_NOTES} WHERE note_id = ?"),
-                (note_id,),
+                (f"SELECT {SELECT_COLUMNS} FROM {TABLE_NOTES} WHERE id = ?"),
+                (int(note_id),),
             )
             row = cursor.fetchone()
 
@@ -152,7 +150,7 @@ class Storage:
         with self._connection() as conn:
             cursor = conn.execute(
                 """
-                SELECT note_id, content, tags, created_at, updated_at
+                SELECT id, content, tags, created_at, updated_at
                 FROM notes
                 ORDER BY updated_at DESC
                 LIMIT 1
@@ -188,13 +186,7 @@ class Storage:
         finally:
             conn.close()
 
-    def _generate_note_id(self, created_at: datetime) -> str:
-        """Generate a deterministic note identifier.
-
-        ``created_at`` is used to ensure chronological ordering is retained.
-        """
-
-        return created_at.strftime("%Y%m%d%H%M%S%f")
+    # Integer primary keys are assigned by SQLite; no manual generation.
 
     def _ensure_columns(self, conn: sqlite3.Connection) -> None:
         columns = {row[1] for row in conn.execute("PRAGMA table_info(notes)")}
@@ -214,7 +206,7 @@ class Storage:
             raise StorageError("Stored tags payload is corrupted.") from exc
 
         return Note(
-            note_id=note_id,
+            id=int(note_id),
             content=content,
             tags=tags,
             created_at=datetime.fromisoformat(created_at_raw),

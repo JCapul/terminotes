@@ -111,13 +111,13 @@ def new(ctx: click.Context) -> None:
     except StorageError as exc:
         raise TerminotesCliError(str(exc)) from exc
 
-    click.echo(f"Created note {note.note_id}")
+    click.echo(f"Created note {note.id}")
 
 
 @cli.command(name="edit")
-@click.argument("note_id", required=False)
+@click.argument("note_id", required=False, type=int)
 @click.pass_context
-def edit(ctx: click.Context, note_id: str | None) -> None:
+def edit(ctx: click.Context, note_id: int | None) -> None:
     """Edit an existing note by its ID."""
 
     config: TerminotesConfig = ctx.obj["config"]
@@ -126,7 +126,7 @@ def edit(ctx: click.Context, note_id: str | None) -> None:
     try:
         if note_id is None:
             existing = storage.fetch_last_updated_note()
-            note_id = existing.note_id
+            note_id = existing.id
         else:
             existing = storage.fetch_note(note_id)
     except StorageError as exc:
@@ -155,7 +155,7 @@ def edit(ctx: click.Context, note_id: str | None) -> None:
     except StorageError as exc:
         raise TerminotesCliError(str(exc)) from exc
 
-    click.echo(f"Updated note {updated.note_id}")
+    click.echo(f"Updated note {updated.id}")
 
 
 @cli.command()
@@ -219,7 +219,7 @@ def info(ctx: click.Context) -> None:
         last_note = storage.fetch_last_updated_note()
         last_title, _ = _split_content(last_note.content)
         last_title_display = last_title or "(title inferred from body)"
-        last_id = last_note.note_id
+        last_id = last_note.id
     except StorageError:
         last_title_display = "(none)"
         last_id = "-"

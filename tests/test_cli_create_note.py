@@ -122,7 +122,7 @@ def test_edit_command_updates_note_and_metadata(tmp_path, monkeypatch) -> None:
         cli.cli,
         [
             "edit",
-            note.note_id,
+            str(note.id),
         ],
     )
 
@@ -150,7 +150,7 @@ def test_edit_without_note_id_uses_last_updated(tmp_path, monkeypatch) -> None:
     first = storage.create_note("First title\n\nFirst body", ["til"])
     storage.create_note("Second title\n\nSecond body", ["python"])
 
-    storage.update_note(first.note_id, "First title\n\nFirst body updated", ["til"])
+    storage.update_note(first.id, "First title\n\nFirst body updated", ["til"])
 
     captured_template: dict[str, str] = {}
 
@@ -184,8 +184,8 @@ def test_edit_without_note_id_uses_last_updated(tmp_path, monkeypatch) -> None:
 
     conn = sqlite3.connect(repo_dir / DB_FILENAME)
     row = conn.execute(
-        "SELECT content, tags FROM notes WHERE note_id = ?",
-        (first.note_id,),
+        "SELECT content, tags FROM notes WHERE id = ?",
+        (first.id,),
     ).fetchone()
     conn.close()
 

@@ -15,18 +15,18 @@ def test_create_note_persists_content_and_tags(tmp_path) -> None:
 
     note = storage.create_note("Captured message", ["til", "python"])
 
-    assert note.note_id
+    assert isinstance(note.id, int) and note.id >= 1
     assert note.tags == ("til", "python")
 
     conn = sqlite3.connect(db_path)
     row = conn.execute(
-        "SELECT note_id, content, tags, created_at, updated_at FROM notes"
+        "SELECT id, content, tags, created_at, updated_at FROM notes"
     ).fetchone()
     conn.close()
 
     assert row is not None
     stored_tags = tuple(json.loads(row[2]))
-    assert row[0] == note.note_id
+    assert row[0] == note.id
     assert row[1] == "Captured message"
     assert stored_tags == note.tags
     assert row[3] == row[4]
@@ -50,12 +50,12 @@ def test_fetch_and_update_note(tmp_path) -> None:
 
     created = storage.create_note("Title\n\nBody", ["til"])
 
-    fetched = storage.fetch_note(created.note_id)
-    assert fetched.note_id == created.note_id
+    fetched = storage.fetch_note(created.id)
+    assert fetched.id == created.id
     assert fetched.content == "Title\n\nBody"
     assert fetched.tags == ("til",)
 
-    updated = storage.update_note(created.note_id, "New Title\n\nNew Body", ["python"])
+    updated = storage.update_note(created.id, "New Title\n\nNew Body", ["python"])
     assert updated.content == "New Title\n\nNew Body"
     assert updated.tags == ("python",)
     assert updated.updated_at >= updated.created_at
@@ -72,7 +72,7 @@ def test_fetch_last_updated_note(tmp_path) -> None:
     storage.create_note("Second note", ["python"])
 
     # Update first note to ensure it becomes the most recently edited entry.
-    storage.update_note(first.note_id, "First note updated", ["til"])
+    storage.update_note(first.id, "First note updated", ["til"])
 
     latest = storage.fetch_last_updated_note()
-    assert latest.note_id == first.note_id
+    assert latest.id == first.id
