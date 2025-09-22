@@ -16,7 +16,6 @@ from .config import (
     InvalidConfigError,
     MissingConfigError,
     TerminotesConfig,
-    ensure_tags_known,
     load_config,
 )
 from .editor import EditorError, open_editor
@@ -103,8 +102,7 @@ def new(ctx: click.Context) -> None:
     template = _render_editor_document(title="", body="", metadata=metadata)
     parsed = _invoke_editor(template, config.editor)
 
-    final_tags = parsed.tags
-    ensure_tags_known_or_die(config, final_tags)
+    final_tags = _normalize_tags_or_warn(config, parsed.tags)
 
     try:
         note = storage.create_note(parsed.content, final_tags)
@@ -147,8 +145,10 @@ def edit(ctx: click.Context, note_id: int | None) -> None:
     )
     parsed = _invoke_editor(template, config.editor)
 
-    final_tags = parsed.tags or existing.tags
-    ensure_tags_known_or_die(config, final_tags)
+    if parsed.tags:
+        final_tags = _normalize_tags_or_warn(config, parsed.tags)
+    else:
+        final_tags = existing.tags
 
     try:
         updated = storage.update_note(note_id, parsed.content, final_tags)
@@ -274,11 +274,18 @@ def _initialize_git_sync(config: TerminotesConfig) -> GitSync | None:
     return git_sync
 
 
-def ensure_tags_known_or_die(config: TerminotesConfig, tags: Iterable[str]) -> None:
+def _normalize_tags_or_warn(
+    config: TerminotesConfig, tags: Iterable[str]
+) -> tuple[str, ...]:
     try:
+        # Reuse validation logic; pass-through when valid.
+        from .config import ensure_tags_known
+
         ensure_tags_known(config, tags)
+        return tuple(tags)
     except InvalidConfigError as exc:
-        raise TerminotesCliError(str(exc)) from exc
+        click.echo(f"Warning: {exc}. Saving note without tags.")
+        return ()
 
 
 def _render_editor_document(title: str, body: str, metadata: dict[str, Any]) -> str:
