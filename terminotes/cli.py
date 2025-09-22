@@ -104,7 +104,7 @@ def new(ctx: click.Context) -> None:
     final_tags = _normalize_tags_or_warn(config, parsed.tags)
 
     try:
-        note = storage.create_note(parsed.content, final_tags)
+        note = storage.create_note(parsed.title or "", parsed.body, final_tags)
     except StorageError as exc:
         raise TerminotesCliError(str(exc)) from exc
 
@@ -130,7 +130,8 @@ def edit(ctx: click.Context, note_id: int | None) -> None:
         raise TerminotesCliError(str(exc)) from exc
 
     now_iso = _current_timestamp()
-    title, body = _split_content(existing.content)
+    title = existing.title or ""
+    body = existing.body
     metadata: dict[str, Any] = {
         "title": title or "",
         "date": existing.created_at.isoformat(),
@@ -150,7 +151,9 @@ def edit(ctx: click.Context, note_id: int | None) -> None:
         final_tags = existing.tags
 
     try:
-        updated = storage.update_note(note_id, parsed.content, final_tags)
+        updated = storage.update_note(
+            note_id, parsed.title or "", parsed.body, final_tags
+        )
     except StorageError as exc:
         raise TerminotesCliError(str(exc)) from exc
 
@@ -216,8 +219,7 @@ def info(ctx: click.Context) -> None:
 
     try:
         last_note = storage.fetch_last_updated_note()
-        last_title, _ = _split_content(last_note.content)
-        last_title_display = last_title or "(title inferred from body)"
+        last_title_display = last_note.title or "(title inferred from body)"
         last_id = last_note.id
     except StorageError:
         last_title_display = "(none)"

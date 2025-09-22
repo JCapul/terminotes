@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Iterable, Iterator, Sequence
 
 DB_FILENAME = "terminotes.sqlite3"
-SELECT_COLUMNS = "id, content, tags, created_at, updated_at"
+SELECT_COLUMNS = "id, title, body, tags, created_at, updated_at"
 TABLE_NOTES = "notes"
 
 
@@ -20,10 +20,19 @@ class Note:
     """Representation of a stored note."""
 
     id: int
-    content: str
+    title: str
+    body: str
     tags: tuple[str, ...]
     created_at: datetime
     updated_at: datetime
+
+    @property
+    def content(self) -> str:
+        if self.title:
+            if self.body:
+                return f"{self.title}\n\n{self.body}".strip()
+            return self.title.strip()
+        return self.body.strip()
 
 
 class StorageError(RuntimeError):
@@ -52,7 +61,8 @@ class Storage:
                 """
                 CREATE TABLE IF NOT EXISTS notes (
                     id INTEGER PRIMARY KEY,
-                    content TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    body TEXT NOT NULL,
                     tags TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
@@ -64,11 +74,12 @@ class Storage:
     # ------------------------------------------------------------------
     # Note operations
     # ------------------------------------------------------------------
-    def create_note(self, content: str, tags: Sequence[str]) -> Note:
+    def create_note(self, title: str, body: str, tags: Sequence[str]) -> Note:
         """Persist a new note and return the resulting ``Note`` instance."""
 
-        content = content.rstrip()
-        if not content:
+        title = title.strip()
+        body = body.rstrip()
+        if not (title or body):
             raise StorageError("Cannot create an empty note.")
 
         normalized_tags = tuple(tags)
@@ -80,11 +91,12 @@ class Storage:
             try:
                 cursor = conn.execute(
                     """
-                    INSERT INTO notes (content, tags, created_at, updated_at)
-                    VALUES (?, ?, ?, ?)
+                    INSERT INTO notes (title, body, tags, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?)
                     """,
                     (
-                        content,
+                        title,
+                        body,
                         encoded_tags,
                         created_at.isoformat(),
                         updated_at.isoformat(),
@@ -95,7 +107,8 @@ class Storage:
 
         return Note(
             id=int(cursor.lastrowid),
-            content=content,
+            title=title,
+            body=body,
             tags=normalized_tags,
             created_at=created_at,
             updated_at=updated_at,
@@ -115,9 +128,12 @@ class Storage:
             raise StorageError(f"Note '{note_id}' not found.")
         return self._row_to_note(row)
 
-    def update_note(self, note_id: int, content: str, tags: Sequence[str]) -> Note:
-        content = content.rstrip()
-        if not content:
+    def update_note(
+        self, note_id: int, title: str, body: str, tags: Sequence[str]
+    ) -> Note:
+        title = title.strip()
+        body = body.rstrip()
+        if not (title or body):
             raise StorageError("Cannot update note with empty content.")
 
         updated_at = datetime.now(tz=timezone.utc)
@@ -127,10 +143,16 @@ class Storage:
             cursor = conn.execute(
                 """
                 UPDATE notes
-                SET content = ?, tags = ?, updated_at = ?
+                SET title = ?, body = ?, tags = ?, updated_at = ?
                 WHERE id = ?
                 """,
-                (content, encoded_tags, updated_at.isoformat(), int(note_id)),
+                (
+                    title,
+                    body,
+                    encoded_tags,
+                    updated_at.isoformat(),
+                    int(note_id),
+                ),
             )
             if cursor.rowcount == 0:
                 raise StorageError(f"Note '{note_id}' not found.")
@@ -150,7 +172,7 @@ class Storage:
         with self._connection() as conn:
             cursor = conn.execute(
                 """
-                SELECT id, content, tags, created_at, updated_at
+                SELECT id, title, body, tags, created_at, updated_at
                 FROM notes
                 ORDER BY updated_at DESC
                 LIMIT 1
@@ -189,17 +211,11 @@ class Storage:
     # Integer primary keys are assigned by SQLite; no manual generation.
 
     def _ensure_columns(self, conn: sqlite3.Connection) -> None:
-        columns = {row[1] for row in conn.execute("PRAGMA table_info(notes)")}
-        if "updated_at" not in columns:
-            conn.execute(
-                "ALTER TABLE notes ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''"
-            )
-            conn.execute(
-                "UPDATE notes SET updated_at = created_at WHERE updated_at = ''"
-            )
+        # No migrations performed; greenfield schema expected.
+        pass
 
     def _row_to_note(self, row: sqlite3.Row | Sequence[str]) -> Note:
-        note_id, content, tags_raw, created_at_raw, updated_at_raw = row
+        note_id, title, body, tags_raw, created_at_raw, updated_at_raw = row
         try:
             tags = tuple(json.loads(tags_raw))
         except json.JSONDecodeError as exc:  # pragma: no cover - defensive
@@ -207,7 +223,8 @@ class Storage:
 
         return Note(
             id=int(note_id),
-            content=content,
+            title=title,
+            body=body,
             tags=tags,
             created_at=datetime.fromisoformat(created_at_raw),
             updated_at=datetime.fromisoformat(updated_at_raw),

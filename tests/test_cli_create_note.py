@@ -37,12 +37,12 @@ def _set_default_paths(config_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(cli, "DEFAULT_CONFIG_PATH", config_path)
 
 
-def _read_single_note(db_path: Path) -> tuple[str, tuple[str, ...]]:
+def _read_single_note(db_path: Path) -> tuple[str, str, tuple[str, ...]]:
     conn = sqlite3.connect(db_path)
-    row = conn.execute("SELECT content, tags FROM notes").fetchone()
+    row = conn.execute("SELECT title, body, tags FROM notes").fetchone()
     conn.close()
     assert row is not None
-    return row[0], tuple(json.loads(row[1]))
+    return row[0], row[1], tuple(json.loads(row[2]))
 
 
 def test_new_command_creates_note_with_metadata(tmp_path, monkeypatch) -> None:
@@ -85,8 +85,9 @@ def test_new_command_creates_note_with_metadata(tmp_path, monkeypatch) -> None:
     assert "date" in metadata
     assert "last_edited" in metadata
 
-    content, tags = _read_single_note(repo_dir / DB_FILENAME)
-    assert content == "Captured Title\n\nBody from editor."
+    title, body, tags = _read_single_note(repo_dir / DB_FILENAME)
+    assert title == "Captured Title"
+    assert body == "Body from editor."
     assert tags == ("til", "python")
 
 
@@ -98,7 +99,7 @@ def test_edit_command_updates_note_and_metadata(tmp_path, monkeypatch) -> None:
 
     storage = Storage(repo_dir / DB_FILENAME)
     storage.initialize()
-    note = storage.create_note("Existing Title\n\nBody", ["til"])
+    note = storage.create_note("Existing Title", "Body", ["til"])
 
     captured_template: dict[str, str] = {}
 
@@ -134,8 +135,9 @@ def test_edit_command_updates_note_and_metadata(tmp_path, monkeypatch) -> None:
     assert metadata["title"] == "Existing Title"
     assert "last_edited" in metadata
 
-    content, tags = _read_single_note(repo_dir / DB_FILENAME)
-    assert content == "Updated Title\n\nUpdated body."
+    title, body, tags = _read_single_note(repo_dir / DB_FILENAME)
+    assert title == "Updated Title"
+    assert body == "Updated body."
     assert tags == ("python",)
 
 
@@ -147,10 +149,10 @@ def test_edit_without_note_id_uses_last_updated(tmp_path, monkeypatch) -> None:
 
     storage = Storage(repo_dir / DB_FILENAME)
     storage.initialize()
-    first = storage.create_note("First title\n\nFirst body", ["til"])
-    storage.create_note("Second title\n\nSecond body", ["python"])
+    first = storage.create_note("First title", "First body", ["til"])
+    storage.create_note("Second title", "Second body", ["python"])
 
-    storage.update_note(first.id, "First title\n\nFirst body updated", ["til"])
+    storage.update_note(first.id, "First title", "First body updated", ["til"])
 
     captured_template: dict[str, str] = {}
 
@@ -184,14 +186,15 @@ def test_edit_without_note_id_uses_last_updated(tmp_path, monkeypatch) -> None:
 
     conn = sqlite3.connect(repo_dir / DB_FILENAME)
     row = conn.execute(
-        "SELECT content, tags FROM notes WHERE id = ?",
+        "SELECT title, body, tags FROM notes WHERE id = ?",
         (first.id,),
     ).fetchone()
     conn.close()
 
     assert row is not None
-    assert row[0] == "First title updated\n\nFirst body updated via edit."
-    assert tuple(json.loads(row[1])) == ("python",)
+    assert row[0] == "First title updated"
+    assert row[1] == "First body updated via edit."
+    assert tuple(json.loads(row[2])) == ("python",)
 
 
 def test_config_command_bootstraps_when_missing(tmp_path, monkeypatch) -> None:
@@ -257,8 +260,9 @@ def test_new_command_without_git_sync(tmp_path, monkeypatch) -> None:
 
     assert result.exit_code == 0, result.output
 
-    content, tags = _read_single_note(repo_dir / DB_FILENAME)
-    assert content == "No Backup\n\nBody."
+    title, body, tags = _read_single_note(repo_dir / DB_FILENAME)
+    assert title == "No Backup"
+    assert body == "Body."
     assert tags == ()
 
 
@@ -291,8 +295,9 @@ def test_new_command_unknown_tags_warns_and_saves_without_tags(
     assert result.exit_code == 0, result.output
     assert "Warning:" in result.output
 
-    content, tags = _read_single_note(repo_dir / DB_FILENAME)
-    assert content == "Unknown Tags\n\nBody."
+    title, body, tags = _read_single_note(repo_dir / DB_FILENAME)
+    assert title == "Unknown Tags"
+    assert body == "Body."
     assert tags == ()
 
 
@@ -323,8 +328,9 @@ def test_new_command_mixed_tags_keeps_valid(tmp_path, monkeypatch) -> None:
     assert result.exit_code == 0, result.output
     assert "Warning:" in result.output
 
-    content, tags = _read_single_note(repo_dir / DB_FILENAME)
-    assert content == "Mixed Tags\n\nBody."
+    title, body, tags = _read_single_note(repo_dir / DB_FILENAME)
+    assert title == "Mixed Tags"
+    assert body == "Body."
     assert tags == ("til",)
 
 
@@ -338,7 +344,7 @@ def test_edit_command_with_unknown_tags_replaces_with_empty(
 
     storage = Storage(repo_dir / DB_FILENAME)
     storage.initialize()
-    note = storage.create_note("Title\n\nBody", ["til"])
+    note = storage.create_note("Title", "Body", ["til"])
 
     def fake_editor(template: str, editor: str | None = None) -> str:
         return (
@@ -379,7 +385,7 @@ def test_edit_command_with_mixed_tags_keeps_valid(tmp_path, monkeypatch) -> None
 
     storage = Storage(repo_dir / DB_FILENAME)
     storage.initialize()
-    note = storage.create_note("Title\n\nBody", ["til"])
+    note = storage.create_note("Title", "Body", ["til"])
 
     def fake_editor(template: str, editor: str | None = None) -> str:
         return (
@@ -421,7 +427,7 @@ def test_info_command_displays_repo_and_config(tmp_path, monkeypatch, capsys) ->
 
     storage = Storage(repo_dir / DB_FILENAME)
     storage.initialize()
-    storage.create_note("Info title\n\nInfo body", ["til"])
+    storage.create_note("Info title", "Info body", ["til"])
 
     runner = CliRunner()
     result = runner.invoke(cli.cli, ["info"])

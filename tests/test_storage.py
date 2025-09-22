@@ -13,23 +13,24 @@ def test_create_note_persists_content_and_tags(tmp_path) -> None:
     storage = Storage(db_path)
     storage.initialize()
 
-    note = storage.create_note("Captured message", ["til", "python"])
+    note = storage.create_note("Captured message", "", ["til", "python"])
 
     assert isinstance(note.id, int) and note.id >= 1
     assert note.tags == ("til", "python")
 
     conn = sqlite3.connect(db_path)
     row = conn.execute(
-        "SELECT id, content, tags, created_at, updated_at FROM notes"
+        "SELECT id, title, body, tags, created_at, updated_at FROM notes"
     ).fetchone()
     conn.close()
 
     assert row is not None
-    stored_tags = tuple(json.loads(row[2]))
+    stored_tags = tuple(json.loads(row[3]))
     assert row[0] == note.id
     assert row[1] == "Captured message"
+    assert row[2] == ""
     assert stored_tags == note.tags
-    assert row[3] == row[4]
+    assert row[4] == row[5]
 
 
 def test_create_note_rejects_empty_content(tmp_path) -> None:
@@ -37,7 +38,7 @@ def test_create_note_rejects_empty_content(tmp_path) -> None:
     storage.initialize()
 
     try:
-        storage.create_note("   \n", [])
+        storage.create_note("   \n", "   \n", [])
     except StorageError as exc:
         assert "empty" in str(exc)
     else:  # pragma: no cover - defensive
@@ -48,15 +49,17 @@ def test_fetch_and_update_note(tmp_path) -> None:
     storage = Storage(tmp_path / DB_FILENAME)
     storage.initialize()
 
-    created = storage.create_note("Title\n\nBody", ["til"])
+    created = storage.create_note("Title", "Body", ["til"])
 
     fetched = storage.fetch_note(created.id)
     assert fetched.id == created.id
-    assert fetched.content == "Title\n\nBody"
+    assert fetched.title == "Title"
+    assert fetched.body == "Body"
     assert fetched.tags == ("til",)
 
-    updated = storage.update_note(created.id, "New Title\n\nNew Body", ["python"])
-    assert updated.content == "New Title\n\nNew Body"
+    updated = storage.update_note(created.id, "New Title", "New Body", ["python"])
+    assert updated.title == "New Title"
+    assert updated.body == "New Body"
     assert updated.tags == ("python",)
     assert updated.updated_at >= updated.created_at
 
@@ -68,11 +71,11 @@ def test_fetch_last_updated_note(tmp_path) -> None:
     storage = Storage(tmp_path / DB_FILENAME)
     storage.initialize()
 
-    first = storage.create_note("First note", ["til"])
-    storage.create_note("Second note", ["python"])
+    first = storage.create_note("First note", "", ["til"])
+    storage.create_note("Second note", "", ["python"])
 
     # Update first note to ensure it becomes the most recently edited entry.
-    storage.update_note(first.id, "First note updated", ["til"])
+    storage.update_note(first.id, "First note updated", "", ["til"])
 
     latest = storage.fetch_last_updated_note()
     assert latest.id == first.id
