@@ -43,11 +43,6 @@ class TerminotesConfig:
     editor: str | None = None
     source_path: Path | None = None
 
-    @property
-    def normalized_repo_path(self) -> Path:
-        """Return the expanded repository path."""
-        return self.repo_path
-
 
 def load_config(path: Path | None = None) -> TerminotesConfig:
     """Load configuration from ``path`` or the default location.

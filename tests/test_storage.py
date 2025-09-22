@@ -69,7 +69,7 @@ def test_fetch_last_updated_note(tmp_path) -> None:
     storage.initialize()
 
     first = storage.create_note("First note", ["til"])
-    second = storage.create_note("Second note", ["python"])
+    storage.create_note("Second note", ["python"])
 
     # Update first note to ensure it becomes the most recently edited entry.
     storage.update_note(first.note_id, "First note updated", ["til"])

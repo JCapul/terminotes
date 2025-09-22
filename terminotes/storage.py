@@ -10,7 +10,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable, Iterator, Sequence
 
-
 DB_FILENAME = "terminotes.sqlite3"
 
 
@@ -108,7 +107,10 @@ class Storage:
     def fetch_note(self, note_id: str) -> Note:
         with self._connection() as conn:
             cursor = conn.execute(
-                "SELECT note_id, content, tags, created_at, updated_at FROM notes WHERE note_id = ?",
+                (
+                    "SELECT note_id, content, tags, created_at, updated_at "
+                    "FROM notes WHERE note_id = ?"
+                ),
                 (note_id,),
             )
             row = cursor.fetchone()
@@ -137,7 +139,10 @@ class Storage:
                 raise StorageError(f"Note '{note_id}' not found.")
 
             cursor = conn.execute(
-                "SELECT note_id, content, tags, created_at, updated_at FROM notes WHERE note_id = ?",
+                (
+                    "SELECT note_id, content, tags, created_at, updated_at "
+                    "FROM notes WHERE note_id = ?"
+                ),
                 (note_id,),
             )
             row = cursor.fetchone()
@@ -195,13 +200,14 @@ class Storage:
         return created_at.strftime("%Y%m%d%H%M%S%f")
 
     def _ensure_columns(self, conn: sqlite3.Connection) -> None:
-        columns = {
-            row[1]
-            for row in conn.execute("PRAGMA table_info(notes)")
-        }
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(notes)")}
         if "updated_at" not in columns:
-            conn.execute("ALTER TABLE notes ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''")
-            conn.execute("UPDATE notes SET updated_at = created_at WHERE updated_at = ''")
+            conn.execute(
+                "ALTER TABLE notes ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''"
+            )
+            conn.execute(
+                "UPDATE notes SET updated_at = created_at WHERE updated_at = ''"
+            )
 
     def _row_to_note(self, row: sqlite3.Row | Sequence[str]) -> Note:
         note_id, content, tags_raw, created_at_raw, updated_at_raw = row

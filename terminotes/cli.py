@@ -62,7 +62,7 @@ def cli(ctx: click.Context) -> None:
         return
 
     config_obj = _load_configuration(allow_create=False, missing_hint=True)
-    storage = Storage(config_obj.normalized_repo_path / DB_FILENAME)
+    storage = Storage(config_obj.repo_path / DB_FILENAME)
     _initialize_storage(storage)
 
     git_sync = _initialize_git_sync(config_obj)
@@ -130,7 +130,9 @@ def edit(ctx: click.Context, note_id: str | None) -> None:
     if existing.tags:
         metadata["tags"] = list(existing.tags)
 
-    template = _render_editor_document(title=metadata["title"], body=body, metadata=metadata)
+    template = _render_editor_document(
+        title=metadata["title"], body=body, metadata=metadata
+    )
     parsed = _invoke_editor(template, config.editor)
 
     final_tags = parsed.tags or existing.tags
@@ -248,7 +250,7 @@ def _initialize_git_sync(config: TerminotesConfig) -> GitSync | None:
     if not config.notes_repo_url:
         return None
 
-    git_sync = GitSync(config.normalized_repo_path, config.notes_repo_url)
+    git_sync = GitSync(config.repo_path, config.notes_repo_url)
     try:
         git_sync.ensure_local_clone()
     except GitSyncError as exc:
@@ -355,11 +357,7 @@ def _bootstrap_config_file(path: Path) -> bool:
         return False
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    default_content = (
-        'notes_repo_url = ""\n'
-        "allowed_tags = []\n"
-        'editor = "vim"\n'
-    )
+    default_content = 'notes_repo_url = ""\nallowed_tags = []\neditor = "vim"\n'
     path.write_text(default_content, encoding="utf-8")
     return True
 

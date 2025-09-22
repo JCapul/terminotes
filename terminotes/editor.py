@@ -11,7 +11,9 @@ class EditorError(RuntimeError):
     """Raised when the external editor fails or returns no note content."""
 
 
-def open_editor(initial_content: str = DEFAULT_TEMPLATE, editor: str | None = None) -> str:
+def open_editor(
+    initial_content: str = DEFAULT_TEMPLATE, editor: str | None = None
+) -> str:
     """Launch the configured editor using Click and return captured content."""
 
     try:

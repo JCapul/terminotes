@@ -9,7 +9,6 @@ from pathlib import Path
 
 import yaml
 from click.testing import CliRunner
-
 from terminotes import cli
 from terminotes import config as config_module
 from terminotes.git_sync import GitSync
@@ -24,11 +23,7 @@ def _write_config(base_dir: Path, *, git_enabled: bool = True) -> Path:
         else 'notes_repo_url = ""\n'
     )
     config_path.write_text(
-        (
-            f"{repo_url_line}"
-            "allowed_tags = [\"til\", \"python\"]\n"
-            'editor = "cat"\n'
-        ).strip(),
+        (f'{repo_url_line}allowed_tags = ["til", "python"]\neditor = "cat"\n').strip(),
         encoding="utf-8",
     )
     repo_dir = base_dir / "notes-repo"
@@ -153,7 +148,7 @@ def test_edit_without_note_id_uses_last_updated(tmp_path, monkeypatch) -> None:
     storage = Storage(repo_dir / DB_FILENAME)
     storage.initialize()
     first = storage.create_note("First title\n\nFirst body", ["til"])
-    second = storage.create_note("Second title\n\nSecond body", ["python"])
+    storage.create_note("Second title\n\nSecond body", ["python"])
 
     storage.update_note(first.note_id, "First title\n\nFirst body updated", ["til"])
 
@@ -198,6 +193,7 @@ def test_edit_without_note_id_uses_last_updated(tmp_path, monkeypatch) -> None:
     assert row[0] == "First title updated\n\nFirst body updated via edit."
     assert tuple(json.loads(row[1])) == ("python",)
 
+
 def test_config_command_bootstraps_when_missing(tmp_path, monkeypatch) -> None:
     config_path = tmp_path / "config" / "config.toml"
     _set_default_paths(config_path, monkeypatch)
@@ -205,7 +201,14 @@ def test_config_command_bootstraps_when_missing(tmp_path, monkeypatch) -> None:
 
     edited_paths: list[str] = []
 
-    def fake_edit(*, filename: str | None = None, editor: str | None = None, text=None, env=None, require_save=True):
+    def fake_edit(
+        *,
+        filename: str | None = None,
+        editor: str | None = None,
+        text=None,
+        env=None,
+        require_save=True,
+    ):
         if filename is not None:
             edited_paths.append(filename)
         return None
@@ -230,7 +233,9 @@ def test_new_command_without_git_sync(tmp_path, monkeypatch) -> None:
 
     class ShouldNotRunGit(GitSync):
         def __init__(self, *args, **kwargs):  # pragma: no cover - defensive
-            raise AssertionError("GitSync should not be instantiated when git sync is disabled")
+            raise AssertionError(
+                "GitSync should not be instantiated when git sync is disabled"
+            )
 
     monkeypatch.setattr(cli, "GitSync", ShouldNotRunGit)
 
