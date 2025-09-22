@@ -296,6 +296,38 @@ def test_new_command_unknown_tags_warns_and_saves_without_tags(
     assert tags == ()
 
 
+def test_new_command_mixed_tags_keeps_valid(tmp_path, monkeypatch) -> None:
+    config_path = _write_config(tmp_path)
+    repo_dir = tmp_path / "notes-repo"
+    _set_default_paths(config_path, monkeypatch)
+    monkeypatch.setattr(GitSync, "ensure_local_clone", lambda self: None)
+
+    def fake_editor(template: str, editor: str | None = None) -> str:
+        return (
+            "---\n"
+            "title: Mixed Tags\n"
+            "last_edited: 2024-01-01T00:00:00+00:00\n"
+            "date: 2024-01-01T00:00:00+00:00\n"
+            "tags:\n"
+            "  - til\n"
+            "  - nope\n"
+            "---\n\n"
+            "Body.\n"
+        )
+
+    monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
+
+    runner = CliRunner()
+    result = runner.invoke(cli.cli, ["new"])
+
+    assert result.exit_code == 0, result.output
+    assert "Warning:" in result.output
+
+    content, tags = _read_single_note(repo_dir / DB_FILENAME)
+    assert content == "Mixed Tags\n\nBody."
+    assert tags == ("til",)
+
+
 def test_edit_command_with_unknown_tags_replaces_with_empty(
     tmp_path, monkeypatch
 ) -> None:
@@ -337,6 +369,48 @@ def test_edit_command_with_unknown_tags_replaces_with_empty(
 
     assert row is not None
     assert tuple(json.loads(row[0])) == ()
+
+
+def test_edit_command_with_mixed_tags_keeps_valid(tmp_path, monkeypatch) -> None:
+    config_path = _write_config(tmp_path)
+    repo_dir = tmp_path / "notes-repo"
+    _set_default_paths(config_path, monkeypatch)
+    monkeypatch.setattr(GitSync, "ensure_local_clone", lambda self: None)
+
+    storage = Storage(repo_dir / DB_FILENAME)
+    storage.initialize()
+    note = storage.create_note("Title\n\nBody", ["til"])
+
+    def fake_editor(template: str, editor: str | None = None) -> str:
+        return (
+            "---\n"
+            "title: Title\n"
+            f"date: {note.created_at.isoformat()}\n"
+            f"last_edited: {datetime.now().isoformat()}\n"
+            "tags:\n"
+            "  - til\n"
+            "  - not-allowed\n"
+            "---\n\n"
+            "Body updated.\n"
+        )
+
+    monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
+
+    runner = CliRunner()
+    result = runner.invoke(cli.cli, ["edit", str(note.id)])
+
+    assert result.exit_code == 0, result.output
+    assert "Warning:" in result.output
+
+    conn = sqlite3.connect(repo_dir / DB_FILENAME)
+    row = conn.execute(
+        "SELECT tags FROM notes WHERE id = ?",
+        (note.id,),
+    ).fetchone()
+    conn.close()
+
+    assert row is not None
+    assert tuple(json.loads(row[0])) == ("til",)
 
 
 def test_info_command_displays_repo_and_config(tmp_path, monkeypatch, capsys) -> None:

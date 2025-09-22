@@ -13,7 +13,6 @@ import yaml
 from .config import (
     DEFAULT_CONFIG_PATH,
     ConfigError,
-    InvalidConfigError,
     MissingConfigError,
     TerminotesConfig,
     load_config,
@@ -277,15 +276,22 @@ def _initialize_git_sync(config: TerminotesConfig) -> GitSync | None:
 def _normalize_tags_or_warn(
     config: TerminotesConfig, tags: Iterable[str]
 ) -> tuple[str, ...]:
-    try:
-        # Reuse validation logic; pass-through when valid.
-        from .config import ensure_tags_known
-
-        ensure_tags_known(config, tags)
-        return tuple(tags)
-    except InvalidConfigError as exc:
-        click.echo(f"Warning: {exc}. Saving note without tags.")
-        return ()
+    # Keep only allowed tags; warn about unknown ones.
+    allowed = set(config.allowed_tags)
+    original = list(tags)
+    valid = [t for t in original if t in allowed]
+    unknown = [t for t in original if t not in allowed]
+    if unknown:
+        unknown_list = ", ".join(unknown)
+        click.echo(
+            f"Warning: Unknown tag(s): {unknown_list}. Saving without them.",
+        )
+    # Preserve order, remove duplicates
+    deduped: list[str] = []
+    for t in valid:
+        if t not in deduped:
+            deduped.append(t)
+    return tuple(deduped)
 
 
 def _render_editor_document(title: str, body: str, metadata: dict[str, Any]) -> str:
