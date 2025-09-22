@@ -20,17 +20,17 @@ def test_create_note_persists_content_and_tags(tmp_path) -> None:
 
     conn = sqlite3.connect(db_path)
     row = conn.execute(
-        "SELECT id, title, body, tags, created_at, updated_at FROM notes"
+        "SELECT id, title, body, description, tags, created_at, updated_at FROM notes"
     ).fetchone()
     conn.close()
 
     assert row is not None
-    stored_tags = tuple(json.loads(row[3]))
+    stored_tags = tuple(json.loads(row[4]))
     assert row[0] == note.id
     assert row[1] == "Captured message"
     assert row[2] == ""
     assert stored_tags == note.tags
-    assert row[4] == row[5]
+    assert row[5] == row[6]
 
 
 def test_create_note_rejects_empty_content(tmp_path) -> None:

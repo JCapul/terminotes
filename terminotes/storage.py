@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Iterable, Iterator, Sequence
 
 DB_FILENAME = "terminotes.sqlite3"
-SELECT_COLUMNS = "id, title, body, tags, created_at, updated_at"
+SELECT_COLUMNS = "id, title, body, description, tags, created_at, updated_at"
 TABLE_NOTES = "notes"
 
 
@@ -22,6 +22,7 @@ class Note:
     id: int
     title: str
     body: str
+    description: str
     tags: tuple[str, ...]
     created_at: datetime
     updated_at: datetime
@@ -63,6 +64,7 @@ class Storage:
                     id INTEGER PRIMARY KEY,
                     title TEXT NOT NULL,
                     body TEXT NOT NULL,
+                    description TEXT NOT NULL,
                     tags TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
@@ -74,7 +76,9 @@ class Storage:
     # ------------------------------------------------------------------
     # Note operations
     # ------------------------------------------------------------------
-    def create_note(self, title: str, body: str, tags: Sequence[str]) -> Note:
+    def create_note(
+        self, title: str, body: str, tags: Sequence[str], description: str = ""
+    ) -> Note:
         """Persist a new note and return the resulting ``Note`` instance."""
 
         title = title.strip()
@@ -90,13 +94,14 @@ class Storage:
         with self._connection() as conn:
             try:
                 cursor = conn.execute(
-                    """
-                    INSERT INTO notes (title, body, tags, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?)
-                    """,
+                    (
+                        "INSERT INTO notes (title, body, description, tags, "
+                        "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
+                    ),
                     (
                         title,
                         body,
+                        description,
                         encoded_tags,
                         created_at.isoformat(),
                         updated_at.isoformat(),
@@ -109,6 +114,7 @@ class Storage:
             id=int(cursor.lastrowid),
             title=title,
             body=body,
+            description=description,
             tags=normalized_tags,
             created_at=created_at,
             updated_at=updated_at,
@@ -129,7 +135,12 @@ class Storage:
         return self._row_to_note(row)
 
     def update_note(
-        self, note_id: int, title: str, body: str, tags: Sequence[str]
+        self,
+        note_id: int,
+        title: str,
+        body: str,
+        tags: Sequence[str],
+        description: str = "",
     ) -> Note:
         title = title.strip()
         body = body.rstrip()
@@ -143,12 +154,13 @@ class Storage:
             cursor = conn.execute(
                 """
                 UPDATE notes
-                SET title = ?, body = ?, tags = ?, updated_at = ?
+                SET title = ?, body = ?, description = ?, tags = ?, updated_at = ?
                 WHERE id = ?
                 """,
                 (
                     title,
                     body,
+                    description,
                     encoded_tags,
                     updated_at.isoformat(),
                     int(note_id),
@@ -172,7 +184,7 @@ class Storage:
         with self._connection() as conn:
             cursor = conn.execute(
                 """
-                SELECT id, title, body, tags, created_at, updated_at
+                SELECT id, title, body, description, tags, created_at, updated_at
                 FROM notes
                 ORDER BY updated_at DESC
                 LIMIT 1
@@ -215,7 +227,9 @@ class Storage:
         pass
 
     def _row_to_note(self, row: sqlite3.Row | Sequence[str]) -> Note:
-        note_id, title, body, tags_raw, created_at_raw, updated_at_raw = row
+        note_id, title, body, description, tags_raw, created_at_raw, updated_at_raw = (
+            row
+        )
         try:
             tags = tuple(json.loads(tags_raw))
         except json.JSONDecodeError as exc:  # pragma: no cover - defensive
@@ -225,6 +239,7 @@ class Storage:
             id=int(note_id),
             title=title,
             body=body,
+            description=description,
             tags=tags,
             created_at=datetime.fromisoformat(created_at_raw),
             updated_at=datetime.fromisoformat(updated_at_raw),

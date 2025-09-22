@@ -32,6 +32,7 @@ class ParsedEditorNote:
 
     title: str | None
     body: str
+    description: str
     tags: tuple[str, ...]
     metadata: dict[str, Any]
 
@@ -93,6 +94,7 @@ def new(ctx: click.Context) -> None:
     timestamp = _current_timestamp()
     metadata = {
         "title": "",
+        "description": "",
         "date": timestamp,
         "last_edited": timestamp,
         "tags": [],
@@ -104,7 +106,9 @@ def new(ctx: click.Context) -> None:
     final_tags = _normalize_tags_or_warn(config, parsed.tags)
 
     try:
-        note = storage.create_note(parsed.title or "", parsed.body, final_tags)
+        note = storage.create_note(
+            parsed.title or "", parsed.body, final_tags, parsed.description
+        )
     except StorageError as exc:
         raise TerminotesCliError(str(exc)) from exc
 
@@ -134,6 +138,7 @@ def edit(ctx: click.Context, note_id: int | None) -> None:
     body = existing.body
     metadata: dict[str, Any] = {
         "title": title or "",
+        "description": existing.description,
         "date": existing.created_at.isoformat(),
         "last_edited": now_iso,
     }
@@ -152,7 +157,7 @@ def edit(ctx: click.Context, note_id: int | None) -> None:
 
     try:
         updated = storage.update_note(
-            note_id, parsed.title or "", parsed.body, final_tags
+            note_id, parsed.title or "", parsed.body, final_tags, parsed.description
         )
     except StorageError as exc:
         raise TerminotesCliError(str(exc)) from exc
@@ -342,6 +347,11 @@ def _parse_editor_note(raw: str) -> ParsedEditorNote:
     if isinstance(title_value, str):
         title = title_value.strip() or None
 
+    description_value = metadata.get("description")
+    description = ""
+    if isinstance(description_value, str):
+        description = description_value.strip()
+
     tags_value = metadata.get("tags")
     tags: tuple[str, ...]
     if isinstance(tags_value, str):
@@ -352,7 +362,9 @@ def _parse_editor_note(raw: str) -> ParsedEditorNote:
     else:
         tags = ()
 
-    return ParsedEditorNote(title=title, body=body, tags=tags, metadata=metadata)
+    return ParsedEditorNote(
+        title=title, body=body, description=description, tags=tags, metadata=metadata
+    )
 
 
 def _split_content(content: str) -> tuple[str | None, str]:
