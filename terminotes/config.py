@@ -7,11 +7,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Sequence
 
-CONFIG_FILENAMES = (
-    "config.toml",
-    "terminotes.toml",
-)
-
 DEFAULT_CONFIG_DIR = Path("~/.config/terminotes").expanduser()
 DEFAULT_CONFIG_PATH = DEFAULT_CONFIG_DIR / "config.toml"
 DEFAULT_REPO_DIRNAME = "notes-repo"

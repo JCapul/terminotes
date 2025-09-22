@@ -47,8 +47,15 @@ class ParsedEditorNote:
 
 
 @click.group()
+@click.option(
+    "--config",
+    "config_path_opt",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Path to configuration TOML file.",
+)
 @click.pass_context
-def cli(ctx: click.Context) -> None:
+def cli(ctx: click.Context, config_path_opt: Path | None) -> None:
     """Terminotes command group."""
 
     ctx.ensure_object(dict)
@@ -58,10 +65,15 @@ def cli(ctx: click.Context) -> None:
         click.echo(ctx.command.get_help(ctx))
         ctx.exit(0)
 
+    # Persist the selected config path for subcommands like 'config'
+    ctx.obj["config_path"] = config_path_opt
+
     if invoked == "config":
         return
 
-    config_obj = _load_configuration(allow_create=False, missing_hint=True)
+    config_obj = _load_configuration(
+        config_path_opt, allow_create=False, missing_hint=True
+    )
     storage = Storage(config_obj.repo_path / DB_FILENAME)
     _initialize_storage(storage)
 
@@ -151,8 +163,12 @@ def edit(ctx: click.Context, note_id: str | None) -> None:
 def config(ctx: click.Context) -> None:
     """Open the Terminotes configuration file in the editor."""
 
-    created = _bootstrap_config_file(DEFAULT_CONFIG_PATH)
-    config_obj = _load_configuration(allow_create=False)
+    # Use the provided --config path when present
+    selected_path: Path | None = ctx.obj.get("config_path")
+    effective_path = selected_path or DEFAULT_CONFIG_PATH
+
+    created = _bootstrap_config_file(effective_path)
+    config_obj = _load_configuration(effective_path, allow_create=False)
     config_path = config_obj.source_path
     if config_path is None:  # pragma: no cover - defensive
         raise TerminotesCliError("Configuration path is not available.")
@@ -280,8 +296,6 @@ def _invoke_editor(template: str, editor: str | None) -> ParsedEditorNote:
         raise TerminotesCliError(str(exc)) from exc
 
     parsed = _parse_editor_note(raw_note)
-    if not parsed.content:
-        raise TerminotesCliError("Cannot create an empty note.")
     return parsed
 
 

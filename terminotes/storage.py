@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Iterable, Iterator, Sequence
 
 DB_FILENAME = "terminotes.sqlite3"
+SELECT_COLUMNS = "note_id, content, tags, created_at, updated_at"
+TABLE_NOTES = "notes"
 
 
 @dataclass(slots=True)
@@ -107,10 +109,7 @@ class Storage:
     def fetch_note(self, note_id: str) -> Note:
         with self._connection() as conn:
             cursor = conn.execute(
-                (
-                    "SELECT note_id, content, tags, created_at, updated_at "
-                    "FROM notes WHERE note_id = ?"
-                ),
+                (f"SELECT {SELECT_COLUMNS} FROM {TABLE_NOTES} WHERE note_id = ?"),
                 (note_id,),
             )
             row = cursor.fetchone()
@@ -139,10 +138,7 @@ class Storage:
                 raise StorageError(f"Note '{note_id}' not found.")
 
             cursor = conn.execute(
-                (
-                    "SELECT note_id, content, tags, created_at, updated_at "
-                    "FROM notes WHERE note_id = ?"
-                ),
+                (f"SELECT {SELECT_COLUMNS} FROM {TABLE_NOTES} WHERE note_id = ?"),
                 (note_id,),
             )
             row = cursor.fetchone()
@@ -184,6 +180,7 @@ class Storage:
     @contextmanager
     def _connection(self) -> Iterator[sqlite3.Connection]:
         conn = sqlite3.connect(self.path)
+        conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
         try:
             yield conn
