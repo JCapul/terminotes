@@ -95,6 +95,50 @@ class GitSync:
             return False
 
     # ---------------------------------------------------------------------
+    # Remote state & divergence helpers
+    # ---------------------------------------------------------------------
+    def fetch_prune(self) -> None:
+        self._run_git("fetch", "--prune")
+
+    def get_upstream(self) -> str | None:
+        """Return the full upstream ref for the current branch, or None."""
+        try:
+            ref = self._run_git(
+                "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"
+            ).strip()
+            return ref or None
+        except GitSyncError:
+            return None
+
+    def detect_divergence(self) -> str:
+        """Detect local/remote relationship for the current branch.
+
+        Returns one of: 'no_upstream', 'up_to_date', 'local_ahead',
+        'remote_ahead', 'diverged'.
+        """
+        if self.get_upstream() is None:
+            return "no_upstream"
+        try:
+            out = self._run_git("rev-list", "--left-right", "--count", "@{u}...HEAD")
+        except GitSyncError:
+            # If rev-list fails, treat as diverged conservatively
+            return "diverged"
+        parts = out.strip().split()
+        if len(parts) != 2:
+            return "diverged"
+        ahead_remote, ahead_local = (int(parts[0]), int(parts[1]))
+        if ahead_remote == 0 and ahead_local == 0:
+            return "up_to_date"
+        if ahead_remote == 0 and ahead_local > 0:
+            return "local_ahead"
+        if ahead_remote > 0 and ahead_local == 0:
+            return "remote_ahead"
+        return "diverged"
+
+    def push_set_upstream(self, branch: str) -> None:
+        self._run_git("push", "-u", "origin", branch)
+
+    # ---------------------------------------------------------------------
     # Internal helpers
     # ---------------------------------------------------------------------
     def _verify_origin(self) -> None:

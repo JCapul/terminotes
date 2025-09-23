@@ -313,25 +313,49 @@ def _maybe_sync_with_git(ctx: click.Context, *, change_desc: str) -> None:
 
     db_path = storage.path
     try:
+        # Preflight: fetch and detect divergence before committing
+        git_sync.fetch_prune()
+        branch = git_sync.current_branch()
+        state = git_sync.detect_divergence()
+
+        push_mode: str | None = None  # 'normal' | 'force' | 'set-upstream'
+
+        if state in ("remote_ahead", "diverged"):
+            choice = _prompt_divergence_resolution(ctx, state)
+            if choice == "abort":
+                raise TerminotesCliError("Sync aborted by user.")
+            if choice == "remote-wins":
+                # Discard local changes (including this command's changes)
+                git_sync.hard_reset_to_remote(branch)
+                click.echo(f"Replaced local DB with origin/{branch} version")
+                return
+            # local-wins: continue and force-push later
+            push_mode = "force"
+        elif state == "no_upstream":
+            push_mode = "set-upstream"
+        else:
+            push_mode = "normal"
+
+        # Commit local DB change
         git_sync.commit_db_update(db_path, message=f"chore(db): {change_desc}")
-        branch = git_sync.push_current_branch()
-        click.echo(f"Pushed updates to origin/{branch}")
+
+        # Push according to mode
+        if push_mode == "force":
+            git_sync.force_push_with_lease(branch)
+            click.echo(f"Force-pushed local DB to origin/{branch}")
+        elif push_mode == "set-upstream":
+            git_sync.push_set_upstream(branch)
+            click.echo(f"Pushed and set upstream to origin/{branch}")
+        else:
+            git_sync.push_current_branch()
+            click.echo(f"Pushed updates to origin/{branch}")
     except GitSyncError as exc:
-        # Push failed (possibly divergence). Prompt for resolution.
-        _handle_push_divergence(ctx, git_sync, str(exc))
+        # Non-divergence git failure (auth/network/other)
+        raise TerminotesCliError(str(exc)) from exc
 
 
-def _handle_push_divergence(
-    ctx: click.Context, git_sync: GitSync, error_msg: str
-) -> None:
+def _prompt_divergence_resolution(ctx: click.Context, state: str) -> str:
     import sys
-
-    click.echo(
-        "Git push failed: remote and local may have diverged.\n"
-        "The notes database is binary and cannot be merged.",
-        err=True,
-    )
-    click.echo(f"Details: {error_msg}", err=True)
 
     if not sys.stdin.isatty():
         raise TerminotesCliError(
@@ -339,26 +363,25 @@ def _handle_push_divergence(
             "Re-run in a terminal or resolve manually."
         )
 
+    if state == "remote_ahead":
+        preface = (
+            "Remote has new commits. The notes database cannot be merged.\n"
+            "Choose how to proceed."
+        )
+    else:
+        preface = (
+            "Local and remote have diverged. The notes database cannot be merged.\n"
+            "Choose how to proceed."
+        )
+    click.echo(preface, err=True)
+
     choice = click.prompt(
         "Choose resolution",
         type=click.Choice(["local-wins", "remote-wins", "abort"], case_sensitive=False),
         default="abort",
         show_choices=True,
     ).lower()
-
-    try:
-        branch = git_sync.current_branch()
-        if choice == "local-wins":
-            git_sync.force_push_with_lease(branch)
-            click.echo(f"Force-pushed local DB to origin/{branch}")
-            return
-        if choice == "remote-wins":
-            git_sync.hard_reset_to_remote(branch)
-            click.echo(f"Replaced local DB with origin/{branch} version")
-            return
-        raise TerminotesCliError("Sync aborted by user.")
-    except GitSyncError as exc:
-        raise TerminotesCliError(str(exc)) from exc
+    return choice
 
 
 def _normalize_tags_or_warn(

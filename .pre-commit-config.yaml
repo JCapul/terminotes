@@ -4,7 +4,6 @@ repos:
     hooks:
       - id: ruff-format
       - id: ruff
-        args: ["--force-exclude"]
 
   - repo: local
     hooks:
