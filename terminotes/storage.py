@@ -69,7 +69,14 @@ class Storage:
     # Note operations
     # ------------------------------------------------------------------
     def create_note(
-        self, title: str, body: str, tags: Sequence[str], description: str = ""
+        self,
+        title: str,
+        body: str,
+        tags: Sequence[str],
+        description: str = "",
+        *,
+        created_at: datetime | None = None,
+        updated_at: datetime | None = None,
     ) -> Note:
         """Persist a new note and return the resulting ``Note`` instance."""
 
@@ -79,8 +86,8 @@ class Storage:
             raise StorageError("Cannot create an empty note.")
 
         normalized_tags = tuple(tags)
-        created_at = datetime.now(tz=timezone.utc)
-        updated_at = created_at
+        created = created_at or datetime.now(tz=timezone.utc)
+        updated = updated_at or created
         encoded_tags = json.dumps(list(normalized_tags))
 
         with self._connection() as conn:
@@ -95,8 +102,8 @@ class Storage:
                         body,
                         description,
                         encoded_tags,
-                        created_at.isoformat(),
-                        updated_at.isoformat(),
+                        created.isoformat(),
+                        updated.isoformat(),
                     ),
                 )
             except sqlite3.DatabaseError as exc:  # pragma: no cover - defensive
@@ -108,8 +115,8 @@ class Storage:
             body=body,
             description=description,
             tags=normalized_tags,
-            created_at=created_at,
-            updated_at=updated_at,
+            created_at=created,
+            updated_at=updated,
         )
 
     def list_notes(self, limit: int = 10) -> Iterable[Note]:
@@ -133,13 +140,17 @@ class Storage:
         body: str,
         tags: Sequence[str],
         description: str = "",
+        *,
+        created_at: datetime | None = None,
+        updated_at: datetime | None = None,
     ) -> Note:
         title = title.strip()
         body = body.rstrip()
         if not (title or body):
             raise StorageError("Cannot update note with empty content.")
 
-        updated_at = datetime.now(tz=timezone.utc)
+        # Determine new timestamps
+        new_updated = updated_at or datetime.now(tz=timezone.utc)
         encoded_tags = json.dumps(list(tags))
 
         with self._connection() as conn:
@@ -154,12 +165,19 @@ class Storage:
                     body,
                     description,
                     encoded_tags,
-                    updated_at.isoformat(),
+                    new_updated.isoformat(),
                     int(note_id),
                 ),
             )
             if cursor.rowcount == 0:
                 raise StorageError(f"Note '{note_id}' not found.")
+
+            # Update created_at if explicitly provided
+            if created_at is not None:
+                conn.execute(
+                    "UPDATE notes SET created_at = ? WHERE id = ?",
+                    (created_at.isoformat(), int(note_id)),
+                )
 
             cursor = conn.execute(
                 (f"SELECT {SELECT_COLUMNS} FROM {TABLE_NOTES} WHERE id = ?"),

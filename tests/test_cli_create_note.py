@@ -45,6 +45,14 @@ def _read_single_note(db_path: Path) -> tuple[str, str, tuple[str, ...]]:
     return row[0], row[1], tuple(json.loads(row[2]))
 
 
+def _read_single_note_timestamps(db_path: Path) -> tuple[datetime, datetime]:
+    conn = sqlite3.connect(db_path)
+    row = conn.execute("SELECT created_at, updated_at FROM notes").fetchone()
+    conn.close()
+    assert row is not None
+    return datetime.fromisoformat(row[0]), datetime.fromisoformat(row[1])
+
+
 def test_new_command_creates_note_with_metadata(tmp_path, monkeypatch) -> None:
     config_path = _write_config(tmp_path)
     repo_dir = tmp_path / "notes-repo"
@@ -89,6 +97,37 @@ def test_new_command_creates_note_with_metadata(tmp_path, monkeypatch) -> None:
     assert title == "Captured Title"
     assert body == "Body from editor."
     assert tags == ("til", "python")
+
+
+def test_new_command_respects_custom_timestamps(tmp_path, monkeypatch) -> None:
+    config_path = _write_config(tmp_path)
+    repo_dir = tmp_path / "notes-repo"
+    _set_default_paths(config_path, monkeypatch)
+    monkeypatch.setattr(GitSync, "ensure_local_clone", lambda self: None)
+
+    created = "2023-01-01T00:00:00+00:00"
+    updated = "2023-02-02T10:00:00+00:00"
+
+    def fake_editor(template: str, editor: str | None = None) -> str:
+        return (
+            "---\n"
+            "title: Has Timestamps\n"
+            f"date: {created}\n"
+            f"last_edited: {updated}\n"
+            "tags: []\n"
+            "---\n\n"
+            "Body.\n"
+        )
+
+    monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
+
+    runner = CliRunner()
+    result = runner.invoke(cli.cli, ["new"])
+    assert result.exit_code == 0, result.output
+
+    created_at, updated_at = _read_single_note_timestamps(repo_dir / DB_FILENAME)
+    assert created_at == datetime.fromisoformat(created)
+    assert updated_at == datetime.fromisoformat(updated)
 
 
 def test_edit_command_updates_note_and_metadata(tmp_path, monkeypatch) -> None:
@@ -139,6 +178,48 @@ def test_edit_command_updates_note_and_metadata(tmp_path, monkeypatch) -> None:
     assert title == "Updated Title"
     assert body == "Updated body."
     assert tags == ("python",)
+
+
+def test_edit_command_allows_changing_timestamps(tmp_path, monkeypatch) -> None:
+    config_path = _write_config(tmp_path)
+    repo_dir = tmp_path / "notes-repo"
+    _set_default_paths(config_path, monkeypatch)
+    monkeypatch.setattr(GitSync, "ensure_local_clone", lambda self: None)
+
+    storage = Storage(repo_dir / DB_FILENAME)
+    storage.initialize()
+    note = storage.create_note("Title", "Body", ["til"])
+
+    new_created = "2020-05-05T05:05:05+00:00"
+    new_updated = "2021-06-06T06:06:06+00:00"
+
+    def fake_editor(template: str, editor: str | None = None) -> str:
+        return (
+            "---\n"
+            "title: Title\n"
+            f"date: {new_created}\n"
+            f"last_edited: {new_updated}\n"
+            "tags:\n"
+            "  - til\n"
+            "---\n\n"
+            "Body updated.\n"
+        )
+
+    monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
+
+    runner = CliRunner()
+    result = runner.invoke(cli.cli, ["edit", str(note.id)])
+    assert result.exit_code == 0, result.output
+
+    conn = sqlite3.connect(repo_dir / DB_FILENAME)
+    row = conn.execute(
+        "SELECT created_at, updated_at FROM notes WHERE id = ?",
+        (note.id,),
+    ).fetchone()
+    conn.close()
+    assert row is not None
+    assert datetime.fromisoformat(row[0]) == datetime.fromisoformat(new_created)
+    assert datetime.fromisoformat(row[1]) == datetime.fromisoformat(new_updated)
 
 
 def test_edit_without_note_id_uses_last_updated(tmp_path, monkeypatch) -> None:
