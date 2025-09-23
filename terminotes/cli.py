@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
@@ -21,10 +22,9 @@ from .git_sync import GitSync, GitSyncError
 from .storage import DB_FILENAME, Storage, StorageError
 from .utils.datetime_fmt import (
     now_user_friendly_utc,
-    to_user_friendly_utc,
     parse_user_datetime,
+    to_user_friendly_utc,
 )
-from datetime import datetime, timezone
 
 
 class TerminotesCliError(click.ClickException):
@@ -143,7 +143,6 @@ def edit(ctx: click.Context, note_id: int | None) -> None:
     except StorageError as exc:
         raise TerminotesCliError(str(exc)) from exc
 
-    now_iso = _current_timestamp()
     title = existing.title or ""
     body = existing.body
     metadata: dict[str, Any] = {

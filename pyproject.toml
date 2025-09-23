@@ -16,6 +16,7 @@ tn = "terminotes.cli:main"
 dev = [
     "pytest",
     "ruff",
+    "pre-commit",
 ]
 
 [build-system]

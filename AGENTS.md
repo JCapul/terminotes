@@ -31,6 +31,14 @@ Terminotes is a Python CLI for jotting quick notes from the terminal. Notes live
 - PRs should include a summary, `just test` output (or failing rationale), linked issues, and terminal captures when UX changes.
 - Require one approving review and passing CI before merging; update this guide as workflows evolve.
 
+### Pre-commit Checks
+- Always run formatting, linting, and tests locally before committing or pushing:
+  - `uv run ruff format .`
+  - `uv run ruff check .`
+  - `uv run pytest`
+- Equivalent `just` tasks are available: `just fmt && just lint && just test`.
+ - Install git hooks once with `just bootstrap` (runs `pre-commit install`). Hooks enforce Ruff and Pytest on commit.
+
 ## Security & Configuration Tips
 - Keep secrets in `.env.local`; provide safe defaults in `.env.example` and ignore the former in git.
 - Configuration can include a `notes_repo_url`. When provided, the CLI ensures the git clone exists and future stages will handle commits/pushes; when omitted, Terminotes operates entirely locally.

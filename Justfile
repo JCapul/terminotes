@@ -2,6 +2,7 @@ set shell := ["bash", "-lc"]
 
 bootstrap:
 	uv sync
+	uv run pre-commit install
 
 cli *args="--help":
 	uv run python -m terminotes {{args}}
@@ -14,4 +15,3 @@ fmt:
 
 test:
 	uv run pytest
-
