@@ -27,14 +27,6 @@ class Note:
     created_at: datetime
     updated_at: datetime
 
-    @property
-    def content(self) -> str:
-        if self.title:
-            if self.body:
-                return f"{self.title}\n\n{self.body}".strip()
-            return self.title.strip()
-        return self.body.strip()
-
 
 class StorageError(RuntimeError):
     """Raised when interacting with the SQLite database fails."""
