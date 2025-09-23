@@ -1,9 +1,14 @@
-"""Integration with Git for syncing the notes repository."""
+"""Integration with Git for syncing the notes repository.
+
+This module encapsulates the minimal git operations Terminotes needs
+to keep the SQLite database synchronized when a remote is configured.
+"""
 
 from __future__ import annotations
 
 import subprocess
 from pathlib import Path
+from typing import Optional
 
 
 class GitSyncError(RuntimeError):
@@ -35,6 +40,59 @@ class GitSync:
         self._run_git(
             "clone", self.remote_url, str(self.repo_path), cwd=self.repo_path.parent
         )
+
+    # ---------------------------------------------------------------------
+    # High-level sync helpers
+    # ---------------------------------------------------------------------
+
+    def commit_db_update(self, db_path: Path, message: Optional[str] = None) -> None:
+        """Stage the DB file and commit.
+
+        If there are no changes, the commit step is skipped gracefully.
+        """
+
+        rel_db = str(db_path)
+        self._run_git("add", rel_db)
+
+        # Only commit if something is actually staged for this file
+        status = self._run_git("status", "--porcelain", "--", rel_db)
+        if not status.strip():
+            # No changes detected, skipping commit
+            return
+
+        commit_msg = message or "chore(db): update notes database"
+        self._run_git("commit", "-m", commit_msg)
+
+    def push_current_branch(self) -> str:
+        """Push to origin for the current branch and return the branch name."""
+
+        branch = self.current_branch()
+        self._run_git("push", "origin", branch)
+        return branch
+
+    def force_push_with_lease(self, branch: str) -> None:
+        self._run_git("push", "--force-with-lease", "origin", branch)
+
+    def hard_reset_to_remote(self, branch: str) -> None:
+        self._run_git("fetch", "--prune")
+        self._run_git("reset", "--hard", f"origin/{branch}")
+
+    def current_branch(self) -> str:
+        name = self._run_git("rev-parse", "--abbrev-ref", "HEAD").strip()
+        if name in ("HEAD", ""):
+            raise GitSyncError("Detached HEAD or unknown branch; cannot push.")
+        return name
+
+    # ---------------------------------------------------------------------
+    # Capability checks
+    # ---------------------------------------------------------------------
+    def is_valid_repo(self) -> bool:
+        """Return True if the path appears to be a functional git repo."""
+        try:
+            out = self._run_git("rev-parse", "--is-inside-work-tree")
+            return out.strip() == "true"
+        except GitSyncError:
+            return False
 
     # ---------------------------------------------------------------------
     # Internal helpers
