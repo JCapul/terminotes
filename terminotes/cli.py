@@ -19,7 +19,12 @@ from .config import (
 from .editor import EditorError, open_editor
 from .git_sync import GitSync, GitSyncError
 from .storage import DB_FILENAME, Storage, StorageError
-from .utils.datetime_fmt import now_user_friendly_utc, to_user_friendly_utc
+from .utils.datetime_fmt import (
+    now_user_friendly_utc,
+    to_user_friendly_utc,
+    parse_user_datetime,
+)
+from datetime import datetime, timezone
 
 
 class TerminotesCliError(click.ClickException):
@@ -96,9 +101,20 @@ def new(ctx: click.Context) -> None:
 
     final_tags = _normalize_tags_or_warn(config, parsed.tags)
 
+    # Parse optional timestamps from metadata
+    created_at_dt = _parse_optional_dt(parsed.metadata.get("date"), field="date")
+    updated_at_dt = _parse_optional_dt(
+        parsed.metadata.get("last_edited"), field="last_edited"
+    )
+
     try:
         note = storage.create_note(
-            parsed.title or "", parsed.body, final_tags, parsed.description
+            parsed.title or "",
+            parsed.body,
+            final_tags,
+            parsed.description,
+            created_at=created_at_dt,
+            updated_at=updated_at_dt,
         )
     except StorageError as exc:
         raise TerminotesCliError(str(exc)) from exc
@@ -133,9 +149,9 @@ def edit(ctx: click.Context, note_id: int | None) -> None:
     metadata: dict[str, Any] = {
         "title": title or "",
         "description": existing.description,
-        # Show user-friendly creation time in UTC for front matter
+        # Show user-friendly creation and last edited times from the note (UTC)
         "date": to_user_friendly_utc(existing.created_at),
-        "last_edited": now_iso,
+        "last_edited": to_user_friendly_utc(existing.updated_at),
     }
     if existing.tags:
         metadata["tags"] = list(existing.tags)
@@ -150,9 +166,21 @@ def edit(ctx: click.Context, note_id: int | None) -> None:
     else:
         final_tags = existing.tags
 
+    # Parse optional timestamps from metadata
+    created_at_dt = _parse_optional_dt(parsed.metadata.get("date"), field="date")
+    updated_at_dt = _parse_optional_dt(
+        parsed.metadata.get("last_edited"), field="last_edited"
+    )
+
     try:
         updated = storage.update_note(
-            note_id, parsed.title or "", parsed.body, final_tags, parsed.description
+            note_id,
+            parsed.title or "",
+            parsed.body,
+            final_tags,
+            parsed.description,
+            created_at=created_at_dt,
+            updated_at=updated_at_dt,
         )
     except StorageError as exc:
         raise TerminotesCliError(str(exc)) from exc
@@ -424,6 +452,22 @@ def _parse_editor_note(raw: str) -> ParsedEditorNote:
 def _current_timestamp() -> str:
     # Fixed and universal user-friendly format, always in UTC.
     return now_user_friendly_utc()
+
+
+def _parse_optional_dt(value: Any, *, field: str) -> datetime | None:
+    """Parse an optional datetime field from metadata; warn on failure."""
+    # Direct datetime provided (PyYAML may parse ISO timestamps already)
+    if isinstance(value, datetime):
+        dt = value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    if isinstance(value, str) and value.strip():
+        try:
+            return parse_user_datetime(value)
+        except Exception:
+            click.echo(
+                f"Warning: Ignoring invalid '{field}' timestamp: {value}",
+            )
+    return None
 
 
 def _format_config(config: TerminotesConfig) -> str:
