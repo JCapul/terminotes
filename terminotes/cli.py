@@ -445,7 +445,7 @@ def _bootstrap_config_file(path: Path) -> bool:
     default_content = (
         'notes_repo_url = ""\n'
         'notes_repo_path = "notes-repo"\n'
-        'allowed_tags = []\n'
+        "allowed_tags = []\n"
         'editor = "vim"\n'
     )
     path.write_text(default_content, encoding="utf-8")
