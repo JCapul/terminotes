@@ -33,7 +33,7 @@ class TerminotesConfig:
     """In-memory representation of the Terminotes configuration file."""
 
     notes_repo_url: str | None
-    repo_path: Path
+    notes_repo_path: Path
     allowed_tags: tuple[str, ...]
     editor: str | None = None
     source_path: Path | None = None
@@ -65,7 +65,22 @@ def load_config(path: Path | None = None) -> TerminotesConfig:
 
     base_dir = config_path.parent if path is not None else DEFAULT_CONFIG_DIR
     config_dir = base_dir.expanduser()
-    notes_repo_path = (config_dir / DEFAULT_REPO_DIRNAME).expanduser().resolve()
+
+    # Allow users to override where the notes repository lives via
+    # `notes_repo_path`. The path may be absolute or relative; relative paths
+    # are resolved against the configuration directory.
+    repo_path_raw = raw.get("notes_repo_path")
+    if repo_path_raw is None:
+        notes_repo_path = (config_dir / DEFAULT_REPO_DIRNAME).expanduser().resolve()
+    elif isinstance(repo_path_raw, str):
+        repo_path_str = repo_path_raw.strip()
+        if repo_path_str:
+            rp = Path(repo_path_str).expanduser()
+            notes_repo_path = (rp if rp.is_absolute() else (config_dir / rp)).resolve()
+        else:
+            notes_repo_path = (config_dir / DEFAULT_REPO_DIRNAME).expanduser().resolve()
+    else:
+        raise InvalidConfigError("'notes_repo_path' must be a string when provided")
 
     notes_repo_url_raw = raw.get("notes_repo_url")
     if notes_repo_url_raw is None:
@@ -102,7 +117,7 @@ def load_config(path: Path | None = None) -> TerminotesConfig:
 
     return TerminotesConfig(
         notes_repo_url=notes_repo_url,
-        repo_path=notes_repo_path,
+        notes_repo_path=notes_repo_path,
         allowed_tags=allowed_tags,
         editor=editor,
         source_path=config_path,

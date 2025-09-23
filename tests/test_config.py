@@ -20,7 +20,7 @@ def write_config(tmp_path: Path, content: str) -> Path:
     return config_file
 
 
-def test_repo_path_defaults_to_config_dir(tmp_path: Path) -> None:
+def test_notes_repo_path_defaults_to_config_dir(tmp_path: Path) -> None:
     config_path = write_config(
         tmp_path / "nested",
         """
@@ -30,7 +30,7 @@ def test_repo_path_defaults_to_config_dir(tmp_path: Path) -> None:
     )
 
     config = load_config(config_path)
-    assert config.repo_path.parent == (config_path.parent).expanduser().resolve()
+    assert config.notes_repo_path.parent == (config_path.parent).expanduser().resolve()
     assert config.source_path == config_path
 
 
@@ -47,7 +47,7 @@ def test_load_config_success(tmp_path: Path) -> None:
     config = load_config(config_path)
     assert isinstance(config, TerminotesConfig)
     assert config.notes_repo_url == "git@example:notes.git"
-    assert config.repo_path.name == "notes-repo"
+    assert config.notes_repo_path.name == "notes-repo"
     assert config.allowed_tags == ("python", "til")
     assert config.editor == "nvim"
     assert config.source_path == config_path

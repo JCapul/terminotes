@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
@@ -20,6 +19,7 @@ from .config import (
 from .editor import EditorError, open_editor
 from .git_sync import GitSync, GitSyncError
 from .storage import DB_FILENAME, Storage, StorageError
+from .utils.datetime_fmt import now_user_friendly_utc, to_user_friendly_utc
 
 
 class TerminotesCliError(click.ClickException):
@@ -35,14 +35,6 @@ class ParsedEditorNote:
     description: str
     tags: tuple[str, ...]
     metadata: dict[str, Any]
-
-    @property
-    def content(self) -> str:
-        if self.title:
-            if self.body:
-                return f"{self.title}\n\n{self.body}".strip()
-            return self.title.strip()
-        return self.body.strip()
 
 
 @click.group()
@@ -70,10 +62,8 @@ def cli(ctx: click.Context, config_path_opt: Path | None) -> None:
     if invoked == "config":
         return
 
-    config_obj = _load_configuration(
-        config_path_opt, allow_create=False, missing_hint=True
-    )
-    storage = Storage(config_obj.repo_path / DB_FILENAME)
+    config_obj = _load_configuration(config_path_opt, missing_hint=True)
+    storage = Storage(config_obj.notes_repo_path / DB_FILENAME)
     _initialize_storage(storage)
 
     git_sync = _initialize_git_sync(config_obj)
@@ -91,6 +81,7 @@ def new(ctx: click.Context) -> None:
     config: TerminotesConfig = ctx.obj["config"]
     storage: Storage = ctx.obj["storage"]
 
+    # Generate user-friendly timestamps for front matter metadata
     timestamp = _current_timestamp()
     metadata = {
         "title": "",
@@ -113,6 +104,9 @@ def new(ctx: click.Context) -> None:
         raise TerminotesCliError(str(exc)) from exc
 
     click.echo(f"Created note {note.id}")
+
+    # Attempt git sync if configured
+    _maybe_sync_with_git(ctx, change_desc=f"create note {note.id}")
 
 
 @cli.command(name="edit")
@@ -139,7 +133,8 @@ def edit(ctx: click.Context, note_id: int | None) -> None:
     metadata: dict[str, Any] = {
         "title": title or "",
         "description": existing.description,
-        "date": existing.created_at.isoformat(),
+        # Show user-friendly creation time in UTC for front matter
+        "date": to_user_friendly_utc(existing.created_at),
         "last_edited": now_iso,
     }
     if existing.tags:
@@ -164,6 +159,9 @@ def edit(ctx: click.Context, note_id: int | None) -> None:
 
     click.echo(f"Updated note {updated.id}")
 
+    # Attempt git sync if configured
+    _maybe_sync_with_git(ctx, change_desc=f"update note {updated.id}")
+
 
 @cli.command()
 @click.pass_context
@@ -175,7 +173,7 @@ def config(ctx: click.Context) -> None:
     effective_path = selected_path or DEFAULT_CONFIG_PATH
 
     created = _bootstrap_config_file(effective_path)
-    config_obj = _load_configuration(effective_path, allow_create=False)
+    config_obj = _load_configuration(effective_path)
     config_path = config_obj.source_path
     if config_path is None:  # pragma: no cover - defensive
         raise TerminotesCliError("Configuration path is not available.")
@@ -243,15 +241,11 @@ def info(ctx: click.Context) -> None:
 def _load_configuration(
     path: Path | None = None,
     *,
-    allow_create: bool,
     missing_hint: bool = False,
 ) -> TerminotesConfig:
     try:
         return load_config(path)
     except MissingConfigError as exc:
-        if allow_create:
-            _bootstrap_config_file(exc.path)
-            return load_config(exc.path)
         if missing_hint:
             raise TerminotesCliError(
                 "Configuration not found. Run 'tn config' once to set up Terminotes."
@@ -272,12 +266,72 @@ def _initialize_git_sync(config: TerminotesConfig) -> GitSync | None:
     if not config.notes_repo_url:
         return None
 
-    git_sync = GitSync(config.repo_path, config.notes_repo_url)
+    git_sync = GitSync(config.notes_repo_path, config.notes_repo_url)
     try:
         git_sync.ensure_local_clone()
     except GitSyncError as exc:
         raise TerminotesCliError(str(exc)) from exc
     return git_sync
+
+
+def _maybe_sync_with_git(ctx: click.Context, *, change_desc: str) -> None:
+    git_sync: GitSync | None = ctx.obj.get("git_sync")
+    storage: Storage = ctx.obj.get("storage")
+
+    if git_sync is None:
+        return
+    # If the repo is not a functional git repository, skip silently.
+    if not git_sync.is_valid_repo():
+        return
+
+    db_path = storage.path
+    try:
+        git_sync.commit_db_update(db_path, message=f"chore(db): {change_desc}")
+        branch = git_sync.push_current_branch()
+        click.echo(f"Pushed updates to origin/{branch}")
+    except GitSyncError as exc:
+        # Push failed (possibly divergence). Prompt for resolution.
+        _handle_push_divergence(ctx, git_sync, str(exc))
+
+
+def _handle_push_divergence(
+    ctx: click.Context, git_sync: GitSync, error_msg: str
+) -> None:
+    import sys
+
+    click.echo(
+        "Git push failed: remote and local may have diverged.\n"
+        "The notes database is binary and cannot be merged.",
+        err=True,
+    )
+    click.echo(f"Details: {error_msg}", err=True)
+
+    if not sys.stdin.isatty():
+        raise TerminotesCliError(
+            "Cannot prompt in non-interactive session. "
+            "Re-run in a terminal or resolve manually."
+        )
+
+    choice = click.prompt(
+        "Choose resolution",
+        type=click.Choice(["local-wins", "remote-wins", "abort"], case_sensitive=False),
+        default="abort",
+        show_choices=True,
+    ).lower()
+
+    try:
+        branch = git_sync.current_branch()
+        if choice == "local-wins":
+            git_sync.force_push_with_lease(branch)
+            click.echo(f"Force-pushed local DB to origin/{branch}")
+            return
+        if choice == "remote-wins":
+            git_sync.hard_reset_to_remote(branch)
+            click.echo(f"Replaced local DB with origin/{branch} version")
+            return
+        raise TerminotesCliError("Sync aborted by user.")
+    except GitSyncError as exc:
+        raise TerminotesCliError(str(exc)) from exc
 
 
 def _normalize_tags_or_warn(
@@ -367,25 +421,15 @@ def _parse_editor_note(raw: str) -> ParsedEditorNote:
     )
 
 
-def _split_content(content: str) -> tuple[str | None, str]:
-    if not content:
-        return None, ""
-    parts = content.split("\n\n", 1)
-    if len(parts) == 2:
-        title = parts[0].strip() or None
-        body = parts[1].strip()
-        return title, body
-    return None, content.strip()
-
-
 def _current_timestamp() -> str:
-    return datetime.now(tz=timezone.utc).isoformat()
+    # Fixed and universal user-friendly format, always in UTC.
+    return now_user_friendly_utc()
 
 
 def _format_config(config: TerminotesConfig) -> str:
     data: dict[str, Any] = {
         "notes_repo_url": config.notes_repo_url,
-        "repo_path": str(config.repo_path),
+        "notes_repo_path": str(config.notes_repo_path),
         "allowed_tags": list(config.allowed_tags),
         "editor": config.editor,
     }
@@ -398,7 +442,12 @@ def _bootstrap_config_file(path: Path) -> bool:
         return False
 
     path.parent.mkdir(parents=True, exist_ok=True)
-    default_content = 'notes_repo_url = ""\nallowed_tags = []\neditor = "vim"\n'
+    default_content = (
+        'notes_repo_url = ""\n'
+        'notes_repo_path = "notes-repo"\n'
+        'allowed_tags = []\n'
+        'editor = "vim"\n'
+    )
     path.write_text(default_content, encoding="utf-8")
     return True
 
