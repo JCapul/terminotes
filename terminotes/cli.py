@@ -200,13 +200,10 @@ def config(ctx: click.Context) -> None:
     effective_path = selected_path or DEFAULT_CONFIG_PATH
 
     created = _bootstrap_config_file(effective_path)
-    config_obj = _load_configuration(effective_path)
-    config_path = config_obj.source_path
-    if config_path is None:  # pragma: no cover - defensive
-        raise TerminotesCliError("Configuration path is not available.")
+    config_path = effective_path
 
     try:
-        result = click.edit(filename=str(config_path), editor=config_obj.editor)
+        result = click.edit(filename=str(config_path))
     except OSError as exc:  # pragma: no cover - editor launch failure rare
         raise TerminotesCliError(f"Failed to launch editor: {exc}") from exc
 
@@ -290,9 +287,6 @@ def _initialize_storage(storage: Storage) -> None:
 
 
 def _initialize_git_sync(config: TerminotesConfig) -> GitSync | None:
-    if not config.notes_repo_url:
-        return None
-
     git_sync = GitSync(config.notes_repo_path, config.notes_repo_url)
     try:
         git_sync.ensure_local_clone()
@@ -509,7 +503,7 @@ def _bootstrap_config_file(path: Path) -> bool:
 
     path.parent.mkdir(parents=True, exist_ok=True)
     default_content = (
-        'notes_repo_url = ""\n'
+        'notes_repo_url = "file:///path/to/notes.git"\n'
         'notes_repo_path = "notes-repo"\n'
         "allowed_tags = []\n"
         'editor = "vim"\n'

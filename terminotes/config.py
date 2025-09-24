@@ -32,7 +32,7 @@ class InvalidConfigError(ConfigError):
 class TerminotesConfig:
     """In-memory representation of the Terminotes configuration file."""
 
-    notes_repo_url: str | None
+    notes_repo_url: str
     notes_repo_path: Path
     allowed_tags: tuple[str, ...]
     editor: str | None = None
@@ -83,13 +83,11 @@ def load_config(path: Path | None = None) -> TerminotesConfig:
         raise InvalidConfigError("'notes_repo_path' must be a string when provided")
 
     notes_repo_url_raw = raw.get("notes_repo_url")
-    if notes_repo_url_raw is None:
-        notes_repo_url: str | None = None
-    elif isinstance(notes_repo_url_raw, str):
-        notes_repo_url_clean = notes_repo_url_raw.strip()
-        notes_repo_url = notes_repo_url_clean or None
-    else:
-        raise InvalidConfigError("'notes_repo_url' must be a string when provided")
+    if not isinstance(notes_repo_url_raw, str):
+        raise InvalidConfigError("'notes_repo_url' is required and must be a string")
+    notes_repo_url = notes_repo_url_raw.strip()
+    if not notes_repo_url:
+        raise InvalidConfigError("'notes_repo_url' must be a non-empty string")
 
     allowed_tags_raw: Sequence[str] | None = raw.get("allowed_tags")
     if allowed_tags_raw is None:

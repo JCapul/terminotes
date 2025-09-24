@@ -17,11 +17,7 @@ from terminotes.storage import DB_FILENAME, Storage
 
 def _write_config(base_dir: Path, *, git_enabled: bool = True) -> Path:
     config_path = base_dir / "config.toml"
-    repo_url_line = (
-        'notes_repo_url = "file:///tmp/terminotes-notes.git"\n'
-        if git_enabled
-        else 'notes_repo_url = ""\n'
-    )
+    repo_url_line = 'notes_repo_url = "file:///tmp/terminotes-notes.git"\n'
     config_path.write_text(
         (f'{repo_url_line}allowed_tags = ["til", "python"]\neditor = "cat"\n').strip(),
         encoding="utf-8",
@@ -310,41 +306,7 @@ def test_config_command_bootstraps_when_missing(tmp_path, monkeypatch) -> None:
     assert config_path.exists()
 
 
-def test_new_command_without_git_sync(tmp_path, monkeypatch) -> None:
-    config_path = _write_config(tmp_path, git_enabled=False)
-    repo_dir = tmp_path / "notes-repo"
-    _set_default_paths(config_path, monkeypatch)
-
-    class ShouldNotRunGit(GitSync):
-        def __init__(self, *args, **kwargs):  # pragma: no cover - defensive
-            raise AssertionError(
-                "GitSync should not be instantiated when git sync is disabled"
-            )
-
-    monkeypatch.setattr(cli, "GitSync", ShouldNotRunGit)
-
-    def fake_editor(template: str, editor: str | None = None) -> str:
-        return (
-            "---\n"
-            "title: No Backup\n"
-            "last_edited: 2024-01-01T00:00:00+00:00\n"
-            "date: 2024-01-01T00:00:00+00:00\n"
-            "tags: []\n"
-            "---\n\n"
-            "Body.\n"
-        )
-
-    monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
-
-    runner = CliRunner()
-    result = runner.invoke(cli.cli, ["new"])
-
-    assert result.exit_code == 0, result.output
-
-    title, body, tags = _read_single_note(repo_dir / DB_FILENAME)
-    assert title == "No Backup"
-    assert body == "Body."
-    assert tags == ()
+## Git URL is now mandatory; local-only mode removed.
 
 
 def test_new_command_unknown_tags_warns_and_saves_without_tags(

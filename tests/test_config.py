@@ -99,13 +99,24 @@ def test_ensure_tags_known_accepts_subset(tmp_path: Path) -> None:
     ensure_tags_known(config, ["python"])
 
 
-def test_notes_repo_optional(tmp_path: Path) -> None:
+def test_notes_repo_url_is_required(tmp_path: Path) -> None:
+    # Missing key
     config_path = write_config(
         tmp_path,
         """
         allowed_tags = []
         """,
     )
+    with pytest.raises(InvalidConfigError):
+        load_config(config_path)
 
-    config = load_config(config_path)
-    assert config.notes_repo_url is None
+    # Empty string
+    config_path = write_config(
+        tmp_path,
+        """
+        allowed_tags = []
+        notes_repo_url = "  "
+        """,
+    )
+    with pytest.raises(InvalidConfigError):
+        load_config(config_path)
