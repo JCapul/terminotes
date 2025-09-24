@@ -6,7 +6,7 @@ import tomllib
 from dataclasses import dataclass
 from typing import Any, Iterable
 
-FRONTMATTER_DELIM = "---"
+FRONTMATTER_DELIM = "+ + +".replace(" ", "")
 
 
 @dataclass(slots=True)
@@ -32,13 +32,17 @@ def parse_document(raw: str) -> ParsedEditorNote:
     lines = raw.splitlines()
     if not lines or lines[0].strip() != FRONTMATTER_DELIM:
         stripped = raw.strip()
-        return ParsedEditorNote(title=None, body=stripped, tags=(), metadata={})
+        return ParsedEditorNote(
+            title=None, body=stripped, description="", tags=(), metadata={}
+        )
 
     try:
         closing_index = lines.index(FRONTMATTER_DELIM, 1)
     except ValueError:
         stripped = raw.strip()
-        return ParsedEditorNote(title=None, body=stripped, tags=(), metadata={})
+        return ParsedEditorNote(
+            title=None, body=stripped, description="", tags=(), metadata={}
+        )
 
     metadata_block = "\n".join(lines[1:closing_index])
     body = "\n".join(lines[closing_index + 1 :]).strip()
