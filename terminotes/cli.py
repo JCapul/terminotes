@@ -254,7 +254,12 @@ def sync(ctx: click.Context, dry_run: bool) -> None:
                 click.echo(f"Pushed and set upstream to origin/{branch}")
             return
 
-        # up_to_date or local_ahead
+        # Explicitly handle up_to_date: nothing to do
+        if state == "up_to_date":
+            click.echo("Already up to date; nothing to sync.")
+            return
+
+        # local_ahead
         if dry_run:
             click.echo(f"Dry-run: would run 'git push origin {branch}'")
         else:
