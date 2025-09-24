@@ -31,6 +31,10 @@ def _set_default_paths(config_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(config_module, "DEFAULT_CONFIG_PATH", config_path)
     monkeypatch.setattr(config_module, "DEFAULT_CONFIG_DIR", config_path.parent)
     monkeypatch.setattr(cli, "DEFAULT_CONFIG_PATH", config_path)
+    # Avoid interacting with real git during CLI tests; skip local commits.
+    monkeypatch.setattr(
+        GitSync, "commit_db_update", lambda self, path, message=None: None
+    )
 
 
 def _read_single_note(db_path: Path) -> tuple[str, str, tuple[str, ...]]:

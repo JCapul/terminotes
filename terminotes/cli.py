@@ -86,6 +86,7 @@ def new(ctx: click.Context) -> None:
 
     config: TerminotesConfig = ctx.obj["config"]
     storage: Storage = ctx.obj["storage"]
+    git_sync: GitSync = ctx.obj.get("git_sync")
 
     # Generate user-friendly timestamps for front matter metadata
     timestamp = _current_timestamp()
@@ -120,8 +121,13 @@ def new(ctx: click.Context) -> None:
     except StorageError as exc:
         raise TerminotesCliError(str(exc)) from exc
 
+    try:
+        message = f"chore(db): create note {note.id}"
+        git_sync.commit_db_update(storage.path, message)
+    except GitSyncError as exc:
+        raise TerminotesCliError(str(exc)) from exc
+
     click.echo(f"Created note {note.id}")
-    _commit_local_db(ctx, message=f"chore(db): create note {note.id}")
 
 
 @cli.command(name="edit")
@@ -132,6 +138,7 @@ def edit(ctx: click.Context, note_id: int | None) -> None:
 
     config: TerminotesConfig = ctx.obj["config"]
     storage: Storage = ctx.obj["storage"]
+    git_sync: GitSync = ctx.obj.get("git_sync")
 
     try:
         if note_id is None:
@@ -183,8 +190,13 @@ def edit(ctx: click.Context, note_id: int | None) -> None:
     except StorageError as exc:
         raise TerminotesCliError(str(exc)) from exc
 
+    try:
+        message = f"chore(db): update note {updated.id}"
+        git_sync.commit_db_update(storage.path, message)
+    except GitSyncError as exc:
+        raise TerminotesCliError(str(exc)) from exc
+
     click.echo(f"Updated note {updated.id}")
-    _commit_local_db(ctx, message=f"chore(db): update note {updated.id}")
 
 
 @cli.command()
@@ -333,7 +345,7 @@ def _initialize_storage(storage: Storage) -> None:
         raise TerminotesCliError(str(exc)) from exc
 
 
-def _initialize_git_sync(config: TerminotesConfig) -> GitSync | None:
+def _initialize_git_sync(config: TerminotesConfig) -> GitSync:
     git_sync = GitSync(config.terminotes_dir, config.git_remote_url)
     try:
         git_sync.ensure_local_clone()
@@ -478,20 +490,6 @@ def _parse_optional_dt(value: Any, *, field: str) -> datetime | None:
                 f"Warning: Ignoring invalid '{field}' timestamp: {value}",
             )
     return None
-
-
-def _commit_local_db(ctx: click.Context, *, message: str) -> None:
-    """Stage and commit the DB to the local git repo if available."""
-    git_sync: GitSync | None = ctx.obj.get("git_sync")
-    storage: Storage | None = ctx.obj.get("storage")
-    if not git_sync or not storage:
-        return
-    if not git_sync.is_valid_repo():
-        return
-    try:
-        git_sync.commit_db_update(storage.path, message=message)
-    except GitSyncError as exc:
-        raise TerminotesCliError(str(exc)) from exc
 
 
 def _format_config(config: TerminotesConfig) -> str:
