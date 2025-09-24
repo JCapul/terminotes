@@ -94,6 +94,11 @@ class GitSync:
         except GitSyncError:
             return False
 
+    def is_worktree_clean(self) -> bool:
+        """Return True if there are no staged or unstaged changes."""
+        out = self._run_git("status", "--porcelain")
+        return out.strip() == ""
+
     # ---------------------------------------------------------------------
     # Remote state & divergence helpers
     # ---------------------------------------------------------------------

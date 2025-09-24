@@ -15,11 +15,15 @@ Use the `Justfile` shortcuts to run common workflows once the environment is boo
 
 ## Git Sync
 
-When `git_remote_url` is configured, Terminotes syncs the SQLite database using plain Git:
+When `git_remote_url` is configured, Terminotes uses plain Git for synchronization.
 
-- After each successful `new` or `edit`, Terminotes stages the DB file, commits, and pushes to the current branch.
-- If the push fails due to remote/local divergence, you’ll be prompted with options:
-  - `local-wins`: force-push your local database to the remote (uses `--force-with-lease`).
-  - `remote-wins`: discard local changes to the DB and hard reset to the remote.
-  - `abort`: stop and leave the repo unchanged.
-- Non-interactive sessions cannot prompt; Terminotes aborts with guidance.
+- `tn new` and `tn edit` commit the SQLite DB locally only (no network).
+- Run `tn sync` to interact with the remote:
+  - Fetches and checks for divergence.
+  - If remote-ahead or diverged, you’ll be prompted:
+    - `local-wins`: force-push local DB to the remote (`--force-with-lease`).
+    - `remote-wins`: discard local changes and hard reset to the remote.
+    - `abort`: stop and leave the repo unchanged.
+  - If there’s no upstream, `tn sync` sets it and pushes.
+  - In non-interactive sessions, prompts are not possible and `tn sync` aborts with guidance.
+  - Requires a clean working tree; commit or stash changes before syncing.

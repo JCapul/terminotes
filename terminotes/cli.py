@@ -68,10 +68,11 @@ def cli(ctx: click.Context, config_path_opt: Path | None) -> None:
         return
 
     config_obj = _load_configuration(config_path_opt, missing_hint=True)
-    storage = Storage(config_obj.terminotes_dir / DB_FILENAME)
-    _initialize_storage(storage)
 
     git_sync = _initialize_git_sync(config_obj)
+
+    storage = Storage(config_obj.terminotes_dir / DB_FILENAME)
+    _initialize_storage(storage)
 
     ctx.obj["config"] = config_obj
     ctx.obj["storage"] = storage
@@ -120,9 +121,6 @@ def new(ctx: click.Context) -> None:
         raise TerminotesCliError(str(exc)) from exc
 
     click.echo(f"Created note {note.id}")
-
-    # Attempt git sync if configured
-    _maybe_sync_with_git(ctx, change_desc=f"create note {note.id}")
 
 
 @cli.command(name="edit")
@@ -186,8 +184,55 @@ def edit(ctx: click.Context, note_id: int | None) -> None:
 
     click.echo(f"Updated note {updated.id}")
 
-    # Attempt git sync if configured
-    _maybe_sync_with_git(ctx, change_desc=f"update note {updated.id}")
+
+@cli.command()
+@click.pass_context
+def sync(ctx: click.Context) -> None:
+    """Synchronize local notes repo with the remote.
+
+    Performs a fetch, detects divergence, prompts for resolution when needed,
+    and pushes with the appropriate strategy. Requires a clean working tree.
+    """
+
+    git_sync: GitSync | None = ctx.obj.get("git_sync")
+    if git_sync is None or not git_sync.is_valid_repo():
+        click.echo("Git repo not initialized or invalid; nothing to sync.")
+        return
+
+    # Enforce clean working tree (strict mode)
+    if not git_sync.is_worktree_clean():
+        raise TerminotesCliError(
+            "Working tree has uncommitted changes. Commit or stash before syncing."
+        )
+
+    try:
+        git_sync.fetch_prune()
+        branch = git_sync.current_branch()
+        state = git_sync.detect_divergence()
+
+        if state in ("remote_ahead", "diverged"):
+            choice = _prompt_divergence_resolution(ctx, state)
+            if choice == "abort":
+                raise TerminotesCliError("Sync aborted by user.")
+            if choice == "remote-wins":
+                git_sync.hard_reset_to_remote(branch)
+                click.echo(f"Replaced local DB with origin/{branch} version")
+                return
+            # local-wins: force push
+            git_sync.force_push_with_lease(branch)
+            click.echo(f"Force-pushed local DB to origin/{branch}")
+            return
+
+        if state == "no_upstream":
+            git_sync.push_set_upstream(branch)
+            click.echo(f"Pushed and set upstream to origin/{branch}")
+            return
+
+        # up_to_date or local_ahead
+        git_sync.push_current_branch()
+        click.echo(f"Pushed updates to origin/{branch}")
+    except GitSyncError as exc:
+        raise TerminotesCliError(str(exc)) from exc
 
 
 @cli.command()
@@ -293,59 +338,6 @@ def _initialize_git_sync(config: TerminotesConfig) -> GitSync | None:
     except GitSyncError as exc:
         raise TerminotesCliError(str(exc)) from exc
     return git_sync
-
-
-def _maybe_sync_with_git(ctx: click.Context, *, change_desc: str) -> None:
-    git_sync: GitSync | None = ctx.obj.get("git_sync")
-    storage: Storage = ctx.obj.get("storage")
-
-    if git_sync is None:
-        return
-    # If the repo is not a functional git repository, skip silently.
-    if not git_sync.is_valid_repo():
-        return
-
-    db_path = storage.path
-    try:
-        # Preflight: fetch and detect divergence before committing
-        git_sync.fetch_prune()
-        branch = git_sync.current_branch()
-        state = git_sync.detect_divergence()
-
-        push_mode: str | None = None  # 'normal' | 'force' | 'set-upstream'
-
-        if state in ("remote_ahead", "diverged"):
-            choice = _prompt_divergence_resolution(ctx, state)
-            if choice == "abort":
-                raise TerminotesCliError("Sync aborted by user.")
-            if choice == "remote-wins":
-                # Discard local changes (including this command's changes)
-                git_sync.hard_reset_to_remote(branch)
-                click.echo(f"Replaced local DB with origin/{branch} version")
-                return
-            # local-wins: continue and force-push later
-            push_mode = "force"
-        elif state == "no_upstream":
-            push_mode = "set-upstream"
-        else:
-            push_mode = "normal"
-
-        # Commit local DB change
-        git_sync.commit_db_update(db_path, message=f"chore(db): {change_desc}")
-
-        # Push according to mode
-        if push_mode == "force":
-            git_sync.force_push_with_lease(branch)
-            click.echo(f"Force-pushed local DB to origin/{branch}")
-        elif push_mode == "set-upstream":
-            git_sync.push_set_upstream(branch)
-            click.echo(f"Pushed and set upstream to origin/{branch}")
-        else:
-            git_sync.push_current_branch()
-            click.echo(f"Pushed updates to origin/{branch}")
-    except GitSyncError as exc:
-        # Non-divergence git failure (auth/network/other)
-        raise TerminotesCliError(str(exc)) from exc
 
 
 def _prompt_divergence_resolution(ctx: click.Context, state: str) -> str:
