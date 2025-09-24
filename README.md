@@ -9,13 +9,13 @@ uv sync
 uv run python -m terminotes --help
 ```
 
-Run `uv run python -m terminotes config` once to bootstrap `~/.config/terminotes/config.toml`, then customise the file. Set `notes_repo_url` to enable git sync or leave it blank to keep notes purely local. You can also change where the local repository lives via `notes_repo_path` (absolute or relative to the config directory).
+Run `uv run python -m terminotes config` once to bootstrap `~/.config/terminotes/config.toml`, then customise the file. Set `git_remote_url` to enable git sync. You can also change where the local repository lives via `terminotes_dir` (absolute or relative to the config directory).
 
 Use the `Justfile` shortcuts to run common workflows once the environment is bootstrapped.
 
 ## Git Sync
 
-When `notes_repo_url` is configured, Terminotes syncs the SQLite database using plain Git:
+When `git_remote_url` is configured, Terminotes syncs the SQLite database using plain Git:
 
 - After each successful `new` or `edit`, Terminotes stages the DB file, commits, and pushes to the current branch.
 - If the push fails due to remote/local divergence, you’ll be prompted with options:

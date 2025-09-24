@@ -68,7 +68,7 @@ def cli(ctx: click.Context, config_path_opt: Path | None) -> None:
         return
 
     config_obj = _load_configuration(config_path_opt, missing_hint=True)
-    storage = Storage(config_obj.notes_repo_path / DB_FILENAME)
+    storage = Storage(config_obj.terminotes_dir / DB_FILENAME)
     _initialize_storage(storage)
 
     git_sync = _initialize_git_sync(config_obj)
@@ -287,7 +287,7 @@ def _initialize_storage(storage: Storage) -> None:
 
 
 def _initialize_git_sync(config: TerminotesConfig) -> GitSync | None:
-    git_sync = GitSync(config.notes_repo_path, config.notes_repo_url)
+    git_sync = GitSync(config.terminotes_dir, config.git_remote_url)
     try:
         git_sync.ensure_local_clone()
     except GitSyncError as exc:
@@ -488,8 +488,8 @@ def _parse_optional_dt(value: Any, *, field: str) -> datetime | None:
 
 def _format_config(config: TerminotesConfig) -> str:
     data: dict[str, Any] = {
-        "notes_repo_url": config.notes_repo_url,
-        "notes_repo_path": str(config.notes_repo_path),
+        "git_remote_url": config.git_remote_url,
+        "terminotes_dir": str(config.terminotes_dir),
         "allowed_tags": list(config.allowed_tags),
         "editor": config.editor,
     }
@@ -503,8 +503,8 @@ def _bootstrap_config_file(path: Path) -> bool:
 
     path.parent.mkdir(parents=True, exist_ok=True)
     default_content = (
-        'notes_repo_url = "file:///path/to/notes.git"\n'
-        'notes_repo_path = "notes-repo"\n'
+        'git_remote_url = "file:///path/to/notes.git"\n'
+        'terminotes_dir = "notes-repo"\n'
         "allowed_tags = []\n"
         'editor = "vim"\n'
     )

@@ -32,8 +32,8 @@ class InvalidConfigError(ConfigError):
 class TerminotesConfig:
     """In-memory representation of the Terminotes configuration file."""
 
-    notes_repo_url: str
-    notes_repo_path: Path
+    git_remote_url: str
+    terminotes_dir: Path
     allowed_tags: tuple[str, ...]
     editor: str | None = None
     source_path: Path | None = None
@@ -67,27 +67,27 @@ def load_config(path: Path | None = None) -> TerminotesConfig:
     config_dir = base_dir.expanduser()
 
     # Allow users to override where the notes repository lives via
-    # `notes_repo_path`. The path may be absolute or relative; relative paths
+    # `terminotes_dir`. The path may be absolute or relative; relative paths
     # are resolved against the configuration directory.
-    repo_path_raw = raw.get("notes_repo_path")
+    repo_path_raw = raw.get("terminotes_dir")
     if repo_path_raw is None:
-        notes_repo_path = (config_dir / DEFAULT_REPO_DIRNAME).expanduser().resolve()
+        terminotes_dir = (config_dir / DEFAULT_REPO_DIRNAME).expanduser().resolve()
     elif isinstance(repo_path_raw, str):
         repo_path_str = repo_path_raw.strip()
         if repo_path_str:
             rp = Path(repo_path_str).expanduser()
-            notes_repo_path = (rp if rp.is_absolute() else (config_dir / rp)).resolve()
+            terminotes_dir = (rp if rp.is_absolute() else (config_dir / rp)).resolve()
         else:
-            notes_repo_path = (config_dir / DEFAULT_REPO_DIRNAME).expanduser().resolve()
+            terminotes_dir = (config_dir / DEFAULT_REPO_DIRNAME).expanduser().resolve()
     else:
-        raise InvalidConfigError("'notes_repo_path' must be a string when provided")
+        raise InvalidConfigError("'terminotes_dir' must be a string when provided")
 
-    notes_repo_url_raw = raw.get("notes_repo_url")
-    if not isinstance(notes_repo_url_raw, str):
-        raise InvalidConfigError("'notes_repo_url' is required and must be a string")
-    notes_repo_url = notes_repo_url_raw.strip()
-    if not notes_repo_url:
-        raise InvalidConfigError("'notes_repo_url' must be a non-empty string")
+    git_remote_url_raw = raw.get("git_remote_url")
+    if not isinstance(git_remote_url_raw, str):
+        raise InvalidConfigError("'git_remote_url' is required and must be a string")
+    git_remote_url = git_remote_url_raw.strip()
+    if not git_remote_url:
+        raise InvalidConfigError("'git_remote_url' must be a non-empty string")
 
     allowed_tags_raw: Sequence[str] | None = raw.get("allowed_tags")
     if allowed_tags_raw is None:
@@ -114,8 +114,8 @@ def load_config(path: Path | None = None) -> TerminotesConfig:
         raise InvalidConfigError("'editor' must be a string when provided")
 
     return TerminotesConfig(
-        notes_repo_url=notes_repo_url,
-        notes_repo_path=notes_repo_path,
+        git_remote_url=git_remote_url,
+        terminotes_dir=terminotes_dir,
         allowed_tags=allowed_tags,
         editor=editor,
         source_path=config_path,

@@ -20,17 +20,17 @@ def write_config(tmp_path: Path, content: str) -> Path:
     return config_file
 
 
-def test_notes_repo_path_defaults_to_config_dir(tmp_path: Path) -> None:
+def test_terminotes_dir_defaults_to_config_dir(tmp_path: Path) -> None:
     config_path = write_config(
         tmp_path / "nested",
         """
         allowed_tags = []
-        notes_repo_url = "git@example:notes.git"
+        git_remote_url = "git@example:notes.git"
         """,
     )
 
     config = load_config(config_path)
-    assert config.notes_repo_path.parent == (config_path.parent).expanduser().resolve()
+    assert config.terminotes_dir.parent == (config_path.parent).expanduser().resolve()
     assert config.source_path == config_path
 
 
@@ -40,14 +40,14 @@ def test_load_config_success(tmp_path: Path) -> None:
         """
         allowed_tags = ["python", "til"]
         editor = "nvim"
-        notes_repo_url = "git@example:notes.git"
+        git_remote_url = "git@example:notes.git"
         """,
     )
 
     config = load_config(config_path)
     assert isinstance(config, TerminotesConfig)
-    assert config.notes_repo_url == "git@example:notes.git"
-    assert config.notes_repo_path.name == "notes-repo"
+    assert config.git_remote_url == "git@example:notes.git"
+    assert config.terminotes_dir.name == "notes-repo"
     assert config.allowed_tags == ("python", "til")
     assert config.editor == "nvim"
     assert config.source_path == config_path
@@ -64,7 +64,7 @@ def test_load_config_rejects_empty_tags(tmp_path: Path) -> None:
         tmp_path,
         """
         allowed_tags = ["python", "  "]
-        notes_repo_url = "git@example:notes.git"
+        git_remote_url = "git@example:notes.git"
         """,
     )
 
@@ -77,7 +77,7 @@ def test_ensure_tags_known_rejects_unknown(tmp_path: Path) -> None:
         tmp_path,
         """
         allowed_tags = ["python"]
-        notes_repo_url = "git@example:notes.git"
+        git_remote_url = "git@example:notes.git"
         """,
     )
     config = load_config(config_path)
@@ -91,7 +91,7 @@ def test_ensure_tags_known_accepts_subset(tmp_path: Path) -> None:
         tmp_path,
         """
         allowed_tags = ["python", "til"]
-        notes_repo_url = "git@example:notes.git"
+        git_remote_url = "git@example:notes.git"
         """,
     )
     config = load_config(config_path)
@@ -99,7 +99,7 @@ def test_ensure_tags_known_accepts_subset(tmp_path: Path) -> None:
     ensure_tags_known(config, ["python"])
 
 
-def test_notes_repo_url_is_required(tmp_path: Path) -> None:
+def test_git_remote_url_is_required(tmp_path: Path) -> None:
     # Missing key
     config_path = write_config(
         tmp_path,
@@ -115,7 +115,7 @@ def test_notes_repo_url_is_required(tmp_path: Path) -> None:
         tmp_path,
         """
         allowed_tags = []
-        notes_repo_url = "  "
+        git_remote_url = "  "
         """,
     )
     with pytest.raises(InvalidConfigError):

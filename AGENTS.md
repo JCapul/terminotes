@@ -41,10 +41,10 @@ Terminotes is a Python CLI for jotting quick notes from the terminal. Notes live
 
 ## Security & Configuration Tips
 - Keep secrets in `.env.local`; provide safe defaults in `.env.example` and ignore the former in git.
-- `notes_repo_url` is required. The CLI ensures the git clone exists and future stages handle commits/pushes.
+- `git_remote_url` is required. The CLI ensures the git clone exists and future stages handle commits/pushes.
 - Ensure git sync errors surface actionable messaging and avoid prompting inside the CLI; rely on external credentials.
 - Validate tag configuration before use and parameterize SQL queries.
 
 ## Pre-release Compatibility
 - This project is pre-1.0 with no user base. Backward compatibility is not required at this stage.
-- We may rename config keys and APIs without migration code. For example, use `notes_repo_path` (not `repo_path`) and do not provide shims.
+- We may rename config keys and APIs without migration code. For example, use `terminotes_dir` (not `repo_path`) and do not provide shims.

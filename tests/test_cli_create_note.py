@@ -17,7 +17,7 @@ from terminotes.storage import DB_FILENAME, Storage
 
 def _write_config(base_dir: Path, *, git_enabled: bool = True) -> Path:
     config_path = base_dir / "config.toml"
-    repo_url_line = 'notes_repo_url = "file:///tmp/terminotes-notes.git"\n'
+    repo_url_line = 'git_remote_url = "file:///tmp/terminotes-notes.git"\n'
     config_path.write_text(
         (f'{repo_url_line}allowed_tags = ["til", "python"]\neditor = "cat"\n').strip(),
         encoding="utf-8",
@@ -480,4 +480,4 @@ def test_info_command_displays_repo_and_config(tmp_path, monkeypatch, capsys) ->
     assert "Database file" in output
     assert "Total notes" in output
     assert "Last edited" in output
-    assert "notes_repo_url" in output
+    assert "git_remote_url" in output
