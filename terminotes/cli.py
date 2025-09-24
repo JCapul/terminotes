@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Sequence
 
 import click
-import yaml
 
 from .app import AppContext, bootstrap
 from .config import (
@@ -290,14 +289,20 @@ def _prompt_divergence_resolution(ctx: click.Context, state: str) -> str:
 
 
 def _format_config(config: TerminotesConfig) -> str:
-    data: dict[str, Any] = {
-        "git_remote_url": config.git_remote_url,
-        "terminotes_dir": str(config.terminotes_dir),
-        "allowed_tags": list(config.allowed_tags),
-        "editor": config.editor,
-    }
+    # Render configuration as TOML for consistency.
+    def quote(s: str | None) -> str:
+        if s is None:
+            return '""'
+        return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
-    return yaml.safe_dump(data, sort_keys=False).strip()
+    allowed = ", ".join('"' + t.replace('"', '\\"') + '"' for t in config.allowed_tags)
+    lines = [
+        f"git_remote_url = {quote(config.git_remote_url)}",
+        f"terminotes_dir = {quote(str(config.terminotes_dir))}",
+        f"allowed_tags = [{allowed}]",
+        f"editor = {quote(config.editor)}",
+    ]
+    return "\n".join(lines)
 
 
 def main(argv: Sequence[str] | None = None) -> int:

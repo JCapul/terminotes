@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import tomllib
 from datetime import datetime
 from pathlib import Path
 
-import yaml
 from click.testing import CliRunner
 from terminotes import cli
 from terminotes import config as config_module
@@ -65,12 +65,10 @@ def test_new_command_creates_note_with_metadata(tmp_path, monkeypatch) -> None:
         captured_template["value"] = template
         return (
             "---\n"
-            "title: Captured Title\n"
-            "date: 2024-01-01T12:00:00+00:00\n"
-            "last_edited: 2024-01-01T12:00:00+00:00\n"
-            "tags:\n"
-            "  - til\n"
-            "  - python\n"
+            'title = "Captured Title"\n'
+            'date = "2024-01-01T12:00:00+00:00"\n'
+            'last_edited = "2024-01-01T12:00:00+00:00"\n'
+            'tags = ["til", "python"]\n'
             "---\n\n"
             "Body from editor.\n"
         )
@@ -89,7 +87,7 @@ def test_new_command_creates_note_with_metadata(tmp_path, monkeypatch) -> None:
 
     template = captured_template["value"]
     metadata_block = template.split("---\n", 2)[1].split("\n---", 1)[0]
-    metadata = yaml.safe_load(metadata_block)
+    metadata = tomllib.loads(metadata_block)
     assert "date" in metadata
     assert "last_edited" in metadata
 
@@ -111,10 +109,10 @@ def test_new_command_respects_custom_timestamps(tmp_path, monkeypatch) -> None:
     def fake_editor(template: str, editor: str | None = None) -> str:
         return (
             "---\n"
-            "title: Has Timestamps\n"
-            f"date: {created}\n"
-            f"last_edited: {updated}\n"
-            "tags: []\n"
+            'title = "Has Timestamps"\n'
+            f'date = "{created}"\n'
+            f'last_edited = "{updated}"\n'
+            "tags = []\n"
             "---\n\n"
             "Body.\n"
         )
@@ -146,11 +144,10 @@ def test_edit_command_updates_note_and_metadata(tmp_path, monkeypatch) -> None:
         captured_template["value"] = template
         return (
             "---\n"
-            "title: Updated Title\n"
-            f"date: {note.created_at.isoformat()}\n"
-            f"last_edited: {datetime.now().isoformat()}\n"
-            "tags:\n"
-            "  - python\n"
+            'title = "Updated Title"\n'
+            f'date = "{note.created_at.isoformat()}"\n'
+            f'last_edited = "{datetime.now().isoformat()}"\n'
+            'tags = ["python"]\n'
             "---\n\n"
             "Updated body.\n"
         )
@@ -170,7 +167,7 @@ def test_edit_command_updates_note_and_metadata(tmp_path, monkeypatch) -> None:
 
     template = captured_template["value"]
     metadata_block = template.split("---\n", 2)[1].split("\n---", 1)[0]
-    metadata = yaml.safe_load(metadata_block)
+    metadata = tomllib.loads(metadata_block)
     assert metadata["title"] == "Existing Title"
     assert "last_edited" in metadata
 
@@ -196,11 +193,10 @@ def test_edit_command_allows_changing_timestamps(tmp_path, monkeypatch) -> None:
     def fake_editor(template: str, editor: str | None = None) -> str:
         return (
             "---\n"
-            "title: Title\n"
-            f"date: {new_created}\n"
-            f"last_edited: {new_updated}\n"
-            "tags:\n"
-            "  - til\n"
+            'title = "Title"\n'
+            f'date = "{new_created}"\n'
+            f'last_edited = "{new_updated}"\n'
+            'tags = ["til"]\n'
             "---\n\n"
             "Body updated.\n"
         )
@@ -241,11 +237,10 @@ def test_edit_without_note_id_uses_last_updated(tmp_path, monkeypatch) -> None:
         captured_template["value"] = template
         return (
             "---\n"
-            "title: First title updated\n"
-            f"date: {first.created_at.isoformat()}\n"
-            f"last_edited: {datetime.now().isoformat()}\n"
-            "tags:\n"
-            "  - python\n"
+            'title = "First title updated"\n'
+            f'date = "{first.created_at.isoformat()}"\n'
+            f'last_edited = "{datetime.now().isoformat()}"\n'
+            'tags = ["python"]\n'
             "---\n\n"
             "First body updated via edit.\n"
         )
@@ -262,7 +257,7 @@ def test_edit_without_note_id_uses_last_updated(tmp_path, monkeypatch) -> None:
 
     template = captured_template["value"]
     metadata_block = template.split("---\n", 2)[1].split("\n---", 1)[0]
-    metadata = yaml.safe_load(metadata_block)
+    metadata = tomllib.loads(metadata_block)
     assert metadata["title"] == "First title"
 
     conn = sqlite3.connect(repo_dir / DB_FILENAME)
@@ -325,11 +320,10 @@ def test_new_command_unknown_tags_warns_and_saves_without_tags(
     def fake_editor(template: str, editor: str | None = None) -> str:
         return (
             "---\n"
-            "title: Unknown Tags\n"
-            "last_edited: 2024-01-01T00:00:00+00:00\n"
-            "date: 2024-01-01T00:00:00+00:00\n"
-            "tags:\n"
-            "  - not-allowed\n"
+            'title = "Unknown Tags"\n'
+            'last_edited = "2024-01-01T00:00:00+00:00"\n'
+            'date = "2024-01-01T00:00:00+00:00"\n'
+            'tags = ["not-allowed"]\n'
             "---\n\n"
             "Body.\n"
         )
@@ -357,12 +351,10 @@ def test_new_command_mixed_tags_keeps_valid(tmp_path, monkeypatch) -> None:
     def fake_editor(template: str, editor: str | None = None) -> str:
         return (
             "---\n"
-            "title: Mixed Tags\n"
-            "last_edited: 2024-01-01T00:00:00+00:00\n"
-            "date: 2024-01-01T00:00:00+00:00\n"
-            "tags:\n"
-            "  - til\n"
-            "  - nope\n"
+            'title = "Mixed Tags"\n'
+            'last_edited = "2024-01-01T00:00:00+00:00"\n'
+            'date = "2024-01-01T00:00:00+00:00"\n'
+            'tags = ["til", "nope"]\n'
             "---\n\n"
             "Body.\n"
         )
@@ -396,11 +388,10 @@ def test_edit_command_with_unknown_tags_replaces_with_empty(
     def fake_editor(template: str, editor: str | None = None) -> str:
         return (
             "---\n"
-            "title: Title\n"
-            f"date: {note.created_at.isoformat()}\n"
-            f"last_edited: {datetime.now().isoformat()}\n"
-            "tags:\n"
-            "  - not-allowed\n"
+            'title = "Title"\n'
+            f'date = "{note.created_at.isoformat()}"\n'
+            f'last_edited = "{datetime.now().isoformat()}"\n'
+            'tags = ["not-allowed"]\n'
             "---\n\n"
             "Body updated.\n"
         )
@@ -437,12 +428,10 @@ def test_edit_command_with_mixed_tags_keeps_valid(tmp_path, monkeypatch) -> None
     def fake_editor(template: str, editor: str | None = None) -> str:
         return (
             "---\n"
-            "title: Title\n"
-            f"date: {note.created_at.isoformat()}\n"
-            f"last_edited: {datetime.now().isoformat()}\n"
-            "tags:\n"
-            "  - til\n"
-            "  - not-allowed\n"
+            'title = "Title"\n'
+            f'date = "{note.created_at.isoformat()}"\n'
+            f'last_edited = "{datetime.now().isoformat()}"\n'
+            'tags = ["til", "not-allowed"]\n'
             "---\n\n"
             "Body updated.\n"
         )
