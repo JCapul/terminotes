@@ -183,7 +183,7 @@ class Storage:
                     description,
                     encoded_tags,
                     new_updated.isoformat(),
-                    (1 if published else None),
+                    (None if published is None else (1 if published else 0)),
                     note_type,
                     int(note_id),
                 ),
