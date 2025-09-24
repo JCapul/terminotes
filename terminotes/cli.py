@@ -64,39 +64,47 @@ def cli(ctx: click.Context, config_path_opt: Path | None) -> None:
     ctx.obj["app"] = app
 
 
-@cli.command()
-@click.pass_context
-def new(ctx: click.Context) -> None:
-    """Create a new note using the configured editor."""
-
-    app: AppContext = ctx.obj["app"]
-    try:
-        note, unknown = create_via_editor(
-            app,
-            edit_fn=open_editor,
-            warn=lambda msg: click.echo(msg),
-        )
-    except (EditorError, StorageError, GitSyncError) as exc:
-        raise TerminotesCliError(str(exc)) from exc
-
-    if unknown:
-        unknown_list = ", ".join(unknown)
-        click.echo(f"Warning: Unknown tag(s): {unknown_list}. Saving without them.")
-
-    click.echo(f"Created note {note.id}")
-
-
-@cli.command(name="edit")
+@cli.command(name="note")
+@click.option(
+    "--edit",
+    "edit_mode",
+    is_flag=True,
+    help=(
+        "Edit an existing note. When NOTE_ID is provided, edits that note; "
+        "otherwise edits the most recently updated note."
+    ),
+)
 @click.argument("note_id", required=False, type=int)
 @click.pass_context
-def edit(ctx: click.Context, note_id: int | None) -> None:
-    """Edit an existing note by its ID."""
+def note(ctx: click.Context, edit_mode: bool, note_id: int | None) -> None:
+    """Create a new note or edit an existing one.
+
+    By default, creates a new note. Use --edit to edit an existing note.
+    """
 
     app: AppContext = ctx.obj["app"]
+    if edit_mode:
+        try:
+            updated, unknown = edit_via_editor(
+                app,
+                note_id,
+                edit_fn=open_editor,
+                warn=lambda msg: click.echo(msg),
+            )
+        except (EditorError, StorageError, GitSyncError) as exc:
+            raise TerminotesCliError(str(exc)) from exc
+
+        if unknown:
+            unknown_list = ", ".join(unknown)
+            click.echo(f"Warning: Unknown tag(s): {unknown_list}. Saving without them.")
+
+        click.echo(f"Updated note {updated.id}")
+        return
+
+    # Create new note
     try:
-        updated, unknown = edit_via_editor(
+        note_obj, unknown = create_via_editor(
             app,
-            note_id,
             edit_fn=open_editor,
             warn=lambda msg: click.echo(msg),
         )
@@ -107,7 +115,7 @@ def edit(ctx: click.Context, note_id: int | None) -> None:
         unknown_list = ", ".join(unknown)
         click.echo(f"Warning: Unknown tag(s): {unknown_list}. Saving without them.")
 
-    click.echo(f"Updated note {updated.id}")
+    click.echo(f"Created note {note_obj.id}")
 
 
 @cli.command()

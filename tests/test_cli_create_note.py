@@ -76,12 +76,7 @@ def test_new_command_creates_note_with_metadata(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
 
     runner = CliRunner()
-    result = runner.invoke(
-        cli.cli,
-        [
-            "new",
-        ],
-    )
+    result = runner.invoke(cli.cli, ["note"])
 
     assert result.exit_code == 0, result.output
 
@@ -120,7 +115,7 @@ def test_new_command_respects_custom_timestamps(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
 
     runner = CliRunner()
-    result = runner.invoke(cli.cli, ["new"])
+    result = runner.invoke(cli.cli, ["note"])
     assert result.exit_code == 0, result.output
 
     created_at, updated_at = _read_single_note_timestamps(repo_dir / DB_FILENAME)
@@ -158,7 +153,8 @@ def test_edit_command_updates_note_and_metadata(tmp_path, monkeypatch) -> None:
     result = runner.invoke(
         cli.cli,
         [
-            "edit",
+            "note",
+            "--edit",
             str(note.id),
         ],
     )
@@ -204,7 +200,7 @@ def test_edit_command_allows_changing_timestamps(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
 
     runner = CliRunner()
-    result = runner.invoke(cli.cli, ["edit", str(note.id)])
+    result = runner.invoke(cli.cli, ["note", "--edit", str(note.id)])
     assert result.exit_code == 0, result.output
 
     conn = sqlite3.connect(repo_dir / DB_FILENAME)
@@ -248,10 +244,7 @@ def test_edit_without_note_id_uses_last_updated(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
 
     runner = CliRunner()
-    result = runner.invoke(
-        cli.cli,
-        ["edit"],
-    )
+    result = runner.invoke(cli.cli, ["note", "--edit"])
 
     assert result.exit_code == 0, result.output
 
@@ -331,7 +324,7 @@ def test_new_command_unknown_tags_warns_and_saves_without_tags(
     monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
 
     runner = CliRunner()
-    result = runner.invoke(cli.cli, ["new"])
+    result = runner.invoke(cli.cli, ["note"])
 
     assert result.exit_code == 0, result.output
     assert "Warning:" in result.output
@@ -362,7 +355,7 @@ def test_new_command_mixed_tags_keeps_valid(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
 
     runner = CliRunner()
-    result = runner.invoke(cli.cli, ["new"])
+    result = runner.invoke(cli.cli, ["note"])
 
     assert result.exit_code == 0, result.output
     assert "Warning:" in result.output
@@ -399,7 +392,7 @@ def test_edit_command_with_unknown_tags_replaces_with_empty(
     monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
 
     runner = CliRunner()
-    result = runner.invoke(cli.cli, ["edit", str(note.id)])
+    result = runner.invoke(cli.cli, ["note", "--edit", str(note.id)])
 
     assert result.exit_code == 0, result.output
     assert "Warning:" in result.output
@@ -439,7 +432,7 @@ def test_edit_command_with_mixed_tags_keeps_valid(tmp_path, monkeypatch) -> None
     monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
 
     runner = CliRunner()
-    result = runner.invoke(cli.cli, ["edit", str(note.id)])
+    result = runner.invoke(cli.cli, ["note", "--edit", str(note.id)])
 
     assert result.exit_code == 0, result.output
     assert "Warning:" in result.output
