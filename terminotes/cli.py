@@ -2,44 +2,29 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Sequence
+from typing import Any, Sequence
 
 import click
 import yaml
 
+from .app import AppContext, bootstrap
 from .config import (
     DEFAULT_CONFIG_PATH,
     ConfigError,
     MissingConfigError,
     TerminotesConfig,
-    load_config,
+    bootstrap_config_file,
 )
-from .editor import EditorError, open_editor
+from .editor import EditorError
+from .editor import open_editor as open_editor
 from .git_sync import GitSync, GitSyncError
-from .storage import DB_FILENAME, Storage, StorageError
-from .utils.datetime_fmt import (
-    now_user_friendly_utc,
-    parse_user_datetime,
-    to_user_friendly_utc,
-)
+from .services.notes import create_via_editor, edit_via_editor
+from .storage import Storage, StorageError
 
 
 class TerminotesCliError(click.ClickException):
     """Shared Click exception wrapper for CLI failures."""
-
-
-@dataclass(slots=True)
-class ParsedEditorNote:
-    """Outcome of parsing the editor payload."""
-
-    title: str | None
-    body: str
-    description: str
-    tags: tuple[str, ...]
-    metadata: dict[str, Any]
 
 
 @click.group()
@@ -67,16 +52,17 @@ def cli(ctx: click.Context, config_path_opt: Path | None) -> None:
     if invoked == "config":
         return
 
-    config_obj = _load_configuration(config_path_opt, missing_hint=True)
+    try:
+        app = bootstrap(config_path_opt, missing_hint=True)
+    except MissingConfigError as exc:
+        raise TerminotesCliError(
+            "Configuration not found. Run 'tn config' once to set up Terminotes."
+        ) from exc
+    except (ConfigError, GitSyncError, StorageError) as exc:  # pragma: no cover
+        # Preserve original behaviour: map to Click exception wrapper.
+        raise TerminotesCliError(str(exc)) from exc
 
-    git_sync = _initialize_git_sync(config_obj)
-
-    storage = Storage(config_obj.terminotes_dir / DB_FILENAME)
-    _initialize_storage(storage)
-
-    ctx.obj["config"] = config_obj
-    ctx.obj["storage"] = storage
-    ctx.obj["git_sync"] = git_sync
+    ctx.obj["app"] = app
 
 
 @cli.command()
@@ -84,48 +70,19 @@ def cli(ctx: click.Context, config_path_opt: Path | None) -> None:
 def new(ctx: click.Context) -> None:
     """Create a new note using the configured editor."""
 
-    config: TerminotesConfig = ctx.obj["config"]
-    storage: Storage = ctx.obj["storage"]
-    git_sync: GitSync = ctx.obj.get("git_sync")
-
-    # Generate user-friendly timestamps for front matter metadata
-    timestamp = _current_timestamp()
-    metadata = {
-        "title": "",
-        "description": "",
-        "date": timestamp,
-        "last_edited": timestamp,
-        "tags": [],
-    }
-
-    template = _render_editor_document(title="", body="", metadata=metadata)
-    parsed = _invoke_editor(template, config.editor)
-
-    final_tags = _normalize_tags_or_warn(config, parsed.tags)
-
-    # Parse optional timestamps from metadata
-    created_at_dt = _parse_optional_dt(parsed.metadata.get("date"), field="date")
-    updated_at_dt = _parse_optional_dt(
-        parsed.metadata.get("last_edited"), field="last_edited"
-    )
-
+    app: AppContext = ctx.obj["app"]
     try:
-        note = storage.create_note(
-            parsed.title or "",
-            parsed.body,
-            final_tags,
-            parsed.description,
-            created_at=created_at_dt,
-            updated_at=updated_at_dt,
+        note, unknown = create_via_editor(
+            app,
+            edit_fn=open_editor,
+            warn=lambda msg: click.echo(msg),
         )
-    except StorageError as exc:
+    except (EditorError, StorageError, GitSyncError) as exc:
         raise TerminotesCliError(str(exc)) from exc
 
-    try:
-        message = f"chore(db): create note {note.id}"
-        git_sync.commit_db_update(storage.path, message)
-    except GitSyncError as exc:
-        raise TerminotesCliError(str(exc)) from exc
+    if unknown:
+        unknown_list = ", ".join(unknown)
+        click.echo(f"Warning: Unknown tag(s): {unknown_list}. Saving without them.")
 
     click.echo(f"Created note {note.id}")
 
@@ -136,65 +93,20 @@ def new(ctx: click.Context) -> None:
 def edit(ctx: click.Context, note_id: int | None) -> None:
     """Edit an existing note by its ID."""
 
-    config: TerminotesConfig = ctx.obj["config"]
-    storage: Storage = ctx.obj["storage"]
-    git_sync: GitSync = ctx.obj.get("git_sync")
-
+    app: AppContext = ctx.obj["app"]
     try:
-        if note_id is None:
-            existing = storage.fetch_last_updated_note()
-            note_id = existing.id
-        else:
-            existing = storage.fetch_note(note_id)
-    except StorageError as exc:
-        raise TerminotesCliError(str(exc)) from exc
-
-    title = existing.title or ""
-    body = existing.body
-    metadata: dict[str, Any] = {
-        "title": title or "",
-        "description": existing.description,
-        # Show user-friendly creation and last edited times from the note (UTC)
-        "date": to_user_friendly_utc(existing.created_at),
-        "last_edited": to_user_friendly_utc(existing.updated_at),
-    }
-    if existing.tags:
-        metadata["tags"] = list(existing.tags)
-
-    template = _render_editor_document(
-        title=metadata["title"], body=body, metadata=metadata
-    )
-    parsed = _invoke_editor(template, config.editor)
-
-    if parsed.tags:
-        final_tags = _normalize_tags_or_warn(config, parsed.tags)
-    else:
-        final_tags = existing.tags
-
-    # Parse optional timestamps from metadata
-    created_at_dt = _parse_optional_dt(parsed.metadata.get("date"), field="date")
-    updated_at_dt = _parse_optional_dt(
-        parsed.metadata.get("last_edited"), field="last_edited"
-    )
-
-    try:
-        updated = storage.update_note(
+        updated, unknown = edit_via_editor(
+            app,
             note_id,
-            parsed.title or "",
-            parsed.body,
-            final_tags,
-            parsed.description,
-            created_at=created_at_dt,
-            updated_at=updated_at_dt,
+            edit_fn=open_editor,
+            warn=lambda msg: click.echo(msg),
         )
-    except StorageError as exc:
+    except (EditorError, StorageError, GitSyncError) as exc:
         raise TerminotesCliError(str(exc)) from exc
 
-    try:
-        message = f"chore(db): update note {updated.id}"
-        git_sync.commit_db_update(storage.path, message)
-    except GitSyncError as exc:
-        raise TerminotesCliError(str(exc)) from exc
+    if unknown:
+        unknown_list = ", ".join(unknown)
+        click.echo(f"Warning: Unknown tag(s): {unknown_list}. Saving without them.")
 
     click.echo(f"Updated note {updated.id}")
 
@@ -209,7 +121,9 @@ def sync(ctx: click.Context, dry_run: bool) -> None:
     and pushes with the appropriate strategy. Requires a clean working tree.
     """
 
-    git_sync: GitSync | None = ctx.obj.get("git_sync")
+    app: AppContext = ctx.obj["app"]
+    git_sync: GitSync = app.git_sync
+
     if git_sync is None or not git_sync.is_valid_repo():
         click.echo("Git repo not initialized or invalid; nothing to sync.")
         return
@@ -278,7 +192,7 @@ def config(ctx: click.Context) -> None:
     selected_path: Path | None = ctx.obj.get("config_path")
     effective_path = selected_path or DEFAULT_CONFIG_PATH
 
-    created = _bootstrap_config_file(effective_path)
+    created = bootstrap_config_file(effective_path)
     config_path = effective_path
 
     try:
@@ -317,8 +231,9 @@ def search(ctx: click.Context, pattern: str) -> None:  # pragma: no cover
 def info(ctx: click.Context) -> None:
     """Display repository information and current configuration."""
 
-    config: TerminotesConfig = ctx.obj["config"]
-    storage: Storage = ctx.obj["storage"]
+    app: AppContext = ctx.obj["app"]
+    config: TerminotesConfig = app.config
+    storage: Storage = app.storage
 
     db_path = storage.path
     total_notes = storage.count_notes()
@@ -339,39 +254,6 @@ def info(ctx: click.Context) -> None:
     click.echo(f"  Last edited   : {last_id} – {last_title_display}")
     click.echo("\nConfiguration:\n")
     click.echo(config_dump)
-
-
-def _load_configuration(
-    path: Path | None = None,
-    *,
-    missing_hint: bool = False,
-) -> TerminotesConfig:
-    try:
-        return load_config(path)
-    except MissingConfigError as exc:
-        if missing_hint:
-            raise TerminotesCliError(
-                "Configuration not found. Run 'tn config' once to set up Terminotes."
-            ) from exc
-        raise TerminotesCliError(str(exc)) from exc
-    except ConfigError as exc:  # pragma: no cover - exercised via CLI tests
-        raise TerminotesCliError(str(exc)) from exc
-
-
-def _initialize_storage(storage: Storage) -> None:
-    try:
-        storage.initialize()
-    except StorageError as exc:
-        raise TerminotesCliError(str(exc)) from exc
-
-
-def _initialize_git_sync(config: TerminotesConfig) -> GitSync:
-    git_sync = GitSync(config.terminotes_dir, config.git_remote_url)
-    try:
-        git_sync.ensure_local_clone()
-    except GitSyncError as exc:
-        raise TerminotesCliError(str(exc)) from exc
-    return git_sync
 
 
 def _prompt_divergence_resolution(ctx: click.Context, state: str) -> str:
@@ -404,112 +286,7 @@ def _prompt_divergence_resolution(ctx: click.Context, state: str) -> str:
     return choice
 
 
-def _normalize_tags_or_warn(
-    config: TerminotesConfig, tags: Iterable[str]
-) -> tuple[str, ...]:
-    # Keep only allowed tags; warn about unknown ones.
-    allowed = set(config.allowed_tags)
-    original = list(tags)
-    valid = [t for t in original if t in allowed]
-    unknown = [t for t in original if t not in allowed]
-    if unknown:
-        unknown_list = ", ".join(unknown)
-        click.echo(
-            f"Warning: Unknown tag(s): {unknown_list}. Saving without them.",
-        )
-    # Preserve order, remove duplicates
-    deduped: list[str] = []
-    for t in valid:
-        if t not in deduped:
-            deduped.append(t)
-    return tuple(deduped)
-
-
-def _render_editor_document(title: str, body: str, metadata: dict[str, Any]) -> str:
-    payload = yaml.safe_dump(metadata, sort_keys=False).strip()
-    body_block = body.rstrip()
-    if body_block:
-        return f"---\n{payload}\n---\n\n{body_block}\n"
-    return f"---\n{payload}\n---\n\n"
-
-
-def _invoke_editor(template: str, editor: str | None) -> ParsedEditorNote:
-    try:
-        raw_note = open_editor(template, editor=editor)
-    except EditorError as exc:
-        raise TerminotesCliError(str(exc)) from exc
-
-    parsed = _parse_editor_note(raw_note)
-    return parsed
-
-
-def _parse_editor_note(raw: str) -> ParsedEditorNote:
-    lines = raw.splitlines()
-    if not lines or lines[0].strip() != "---":
-        stripped = raw.strip()
-        return ParsedEditorNote(title=None, body=stripped, tags=(), metadata={})
-
-    try:
-        closing_index = lines.index("---", 1)
-    except ValueError:
-        stripped = raw.strip()
-        return ParsedEditorNote(title=None, body=stripped, tags=(), metadata={})
-
-    metadata_block = "\n".join(lines[1:closing_index])
-    body = "\n".join(lines[closing_index + 1 :]).strip()
-
-    metadata: dict[str, Any] = {}
-    try:
-        loaded = yaml.safe_load(metadata_block) or {}
-        if isinstance(loaded, dict):
-            metadata = loaded
-    except yaml.YAMLError:
-        metadata = {}
-
-    title: str | None = None
-    title_value = metadata.get("title")
-    if isinstance(title_value, str):
-        title = title_value.strip() or None
-
-    description_value = metadata.get("description")
-    description = ""
-    if isinstance(description_value, str):
-        description = description_value.strip()
-
-    tags_value = metadata.get("tags")
-    tags: tuple[str, ...]
-    if isinstance(tags_value, str):
-        tags_iter = [part.strip() for part in tags_value.split(",") if part.strip()]
-        tags = tuple(tags_iter)
-    elif isinstance(tags_value, Iterable) and not isinstance(tags_value, (str, bytes)):
-        tags = tuple(str(tag).strip() for tag in tags_value if str(tag).strip())
-    else:
-        tags = ()
-
-    return ParsedEditorNote(
-        title=title, body=body, description=description, tags=tags, metadata=metadata
-    )
-
-
-def _current_timestamp() -> str:
-    # Fixed and universal user-friendly format, always in UTC.
-    return now_user_friendly_utc()
-
-
-def _parse_optional_dt(value: Any, *, field: str) -> datetime | None:
-    """Parse an optional datetime field from metadata; warn on failure."""
-    # Direct datetime provided (PyYAML may parse ISO timestamps already)
-    if isinstance(value, datetime):
-        dt = value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
-        return dt.astimezone(timezone.utc)
-    if isinstance(value, str) and value.strip():
-        try:
-            return parse_user_datetime(value)
-        except Exception:
-            click.echo(
-                f"Warning: Ignoring invalid '{field}' timestamp: {value}",
-            )
-    return None
+# Removed front matter and tag helpers now in dedicated modules.
 
 
 def _format_config(config: TerminotesConfig) -> str:
@@ -521,21 +298,6 @@ def _format_config(config: TerminotesConfig) -> str:
     }
 
     return yaml.safe_dump(data, sort_keys=False).strip()
-
-
-def _bootstrap_config_file(path: Path) -> bool:
-    if path.exists():
-        return False
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-    default_content = (
-        'git_remote_url = "file:///path/to/notes.git"\n'
-        'terminotes_dir = "notes-repo"\n'
-        "allowed_tags = []\n"
-        'editor = "vim"\n'
-    )
-    path.write_text(default_content, encoding="utf-8")
-    return True
 
 
 def main(argv: Sequence[str] | None = None) -> int:
