@@ -8,7 +8,6 @@ from terminotes.config import (
     ConfigError,
     InvalidConfigError,
     TerminotesConfig,
-    ensure_tags_known,
     load_config,
 )
 
@@ -70,33 +69,6 @@ def test_load_config_rejects_empty_tags(tmp_path: Path) -> None:
 
     with pytest.raises(InvalidConfigError):
         load_config(config_path)
-
-
-def test_ensure_tags_known_rejects_unknown(tmp_path: Path) -> None:
-    config_path = write_config(
-        tmp_path,
-        """
-        allowed_tags = ["python"]
-        git_remote_url = "git@example:notes.git"
-        """,
-    )
-    config = load_config(config_path)
-
-    with pytest.raises(InvalidConfigError):
-        ensure_tags_known(config, ["til"])
-
-
-def test_ensure_tags_known_accepts_subset(tmp_path: Path) -> None:
-    config_path = write_config(
-        tmp_path,
-        """
-        allowed_tags = ["python", "til"]
-        git_remote_url = "git@example:notes.git"
-        """,
-    )
-    config = load_config(config_path)
-
-    ensure_tags_known(config, ["python"])
 
 
 def test_git_remote_url_is_required(tmp_path: Path) -> None:

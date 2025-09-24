@@ -5,7 +5,7 @@ from __future__ import annotations
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Sequence
+from typing import Sequence
 
 DEFAULT_CONFIG_DIR = Path("~/.config/terminotes").expanduser()
 DEFAULT_CONFIG_PATH = DEFAULT_CONFIG_DIR / "config.toml"
@@ -120,22 +120,6 @@ def load_config(path: Path | None = None) -> TerminotesConfig:
         editor=editor,
         source_path=config_path,
     )
-
-
-def ensure_tags_known(config: TerminotesConfig, tags: Iterable[str]) -> None:
-    """Validate that each tag is present in ``config.allowed_tags``.
-
-    Raises
-    ------
-    InvalidConfigError
-        If tags contain unknown values.
-    """
-
-    allowed = set(config.allowed_tags)
-    unknown = [tag for tag in tags if tag not in allowed]
-    if unknown:
-        tag_list = ", ".join(sorted(unknown))
-        raise InvalidConfigError(f"Unknown tag(s): {tag_list}")
 
 
 def bootstrap_config_file(path: Path) -> bool:
