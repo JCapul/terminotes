@@ -200,8 +200,9 @@ def edit(ctx: click.Context, note_id: int | None) -> None:
 
 
 @cli.command()
+@click.option("--dry-run", is_flag=True, help="Show actions without executing.")
 @click.pass_context
-def sync(ctx: click.Context) -> None:
+def sync(ctx: click.Context, dry_run: bool) -> None:
     """Synchronize local notes repo with the remote.
 
     Performs a fetch, detects divergence, prompts for resolution when needed,
@@ -229,22 +230,36 @@ def sync(ctx: click.Context) -> None:
             if choice == "abort":
                 raise TerminotesCliError("Sync aborted by user.")
             if choice == "remote-wins":
-                git_sync.hard_reset_to_remote(branch)
-                click.echo(f"Replaced local DB with origin/{branch} version")
+                if dry_run:
+                    click.echo(f"Dry-run: would run 'git reset --hard origin/{branch}'")
+                else:
+                    git_sync.hard_reset_to_remote(branch)
+                    click.echo(f"Replaced local DB with origin/{branch} version")
                 return
             # local-wins: force push
-            git_sync.force_push_with_lease(branch)
-            click.echo(f"Force-pushed local DB to origin/{branch}")
+            if dry_run:
+                click.echo(
+                    f"Dry-run: would run 'git push --force-with-lease origin {branch}'"
+                )
+            else:
+                git_sync.force_push_with_lease(branch)
+                click.echo(f"Force-pushed local DB to origin/{branch}")
             return
 
         if state == "no_upstream":
-            git_sync.push_set_upstream(branch)
-            click.echo(f"Pushed and set upstream to origin/{branch}")
+            if dry_run:
+                click.echo(f"Dry-run: would run 'git push -u origin {branch}'")
+            else:
+                git_sync.push_set_upstream(branch)
+                click.echo(f"Pushed and set upstream to origin/{branch}")
             return
 
         # up_to_date or local_ahead
-        git_sync.push_current_branch()
-        click.echo(f"Pushed updates to origin/{branch}")
+        if dry_run:
+            click.echo(f"Dry-run: would run 'git push origin {branch}'")
+        else:
+            git_sync.push_current_branch()
+            click.echo(f"Pushed updates to origin/{branch}")
     except GitSyncError as exc:
         raise TerminotesCliError(str(exc)) from exc
 
