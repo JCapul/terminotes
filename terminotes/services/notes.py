@@ -40,6 +40,7 @@ def create_via_editor(
         "date": timestamp,
         "last_edited": timestamp,
         "tags": [],
+        "published": False,
     }
 
     template = render_document(title="", body="", metadata=metadata)
@@ -47,6 +48,8 @@ def create_via_editor(
     parsed = parse_document(raw)
 
     final_tags, unknown = _normalize_tags(ctx, parsed.tags)
+
+    published_flag = _extract_published(parsed.metadata, default=False)
 
     created_at_dt = _parse_optional_dt(
         parsed.metadata.get("date"), field="date", warn=warn
@@ -62,6 +65,7 @@ def create_via_editor(
         parsed.description,
         created_at=created_at_dt,
         updated_at=updated_at_dt,
+        published=published_flag,
     )
     # Commit the DB update locally (no network interaction).
     ctx.git_sync.commit_db_update(ctx.storage.path, f"chore(db): create note {note.id}")
@@ -95,6 +99,7 @@ def edit_via_editor(
         "description": existing.description,
         "date": to_user_friendly_utc(existing.created_at),
         "last_edited": to_user_friendly_utc(existing.updated_at),
+        "published": existing.published,
     }
     if existing.tags:
         meta["tags"] = list(existing.tags)
@@ -117,6 +122,8 @@ def edit_via_editor(
         parsed.metadata.get("last_edited"), field="last_edited", warn=warn
     )
 
+    new_published = _extract_published(parsed.metadata, default=existing.published)
+
     updated = ctx.storage.update_note(
         target_id,
         parsed.title or "",
@@ -125,6 +132,7 @@ def edit_via_editor(
         parsed.description,
         created_at=created_at_dt,
         updated_at=updated_at_dt,
+        published=new_published,
     )
     # Commit the DB update locally (no network interaction).
     ctx.git_sync.commit_db_update(
@@ -153,3 +161,16 @@ def _parse_optional_dt(
             if warn is not None:
                 warn(f"Warning: Ignoring invalid '{field}' timestamp: {value}")
     return None
+
+
+def _extract_published(metadata: dict[str, object], default: bool) -> bool:
+    value = metadata.get("published")
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        val = value.strip().lower()
+        if val in {"true", "1", "yes", "on"}:
+            return True
+        if val in {"false", "0", "no", "off"}:
+            return False
+    return default

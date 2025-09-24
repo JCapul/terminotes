@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Iterable, Iterator, Sequence
 
 DB_FILENAME = "terminotes.sqlite3"
-SELECT_COLUMNS = "id, title, body, description, tags, created_at, updated_at"
+SELECT_COLUMNS = "id, title, body, description, tags, created_at, updated_at, published"
 TABLE_NOTES = "notes"
 
 
@@ -26,6 +26,7 @@ class Note:
     tags: tuple[str, ...]
     created_at: datetime
     updated_at: datetime
+    published: bool
 
 
 class StorageError(RuntimeError):
@@ -59,7 +60,8 @@ class Storage:
                     description TEXT NOT NULL,
                     tags TEXT NOT NULL,
                     created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
+                    updated_at TEXT NOT NULL,
+                    published INTEGER NOT NULL DEFAULT 0
                 )
                 """
             )
@@ -77,6 +79,7 @@ class Storage:
         *,
         created_at: datetime | None = None,
         updated_at: datetime | None = None,
+        published: bool = False,
     ) -> Note:
         """Persist a new note and return the resulting ``Note`` instance."""
 
@@ -95,7 +98,8 @@ class Storage:
                 cursor = conn.execute(
                     (
                         "INSERT INTO notes (title, body, description, tags, "
-                        "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
+                        "created_at, updated_at, published) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?)"
                     ),
                     (
                         title,
@@ -104,6 +108,7 @@ class Storage:
                         encoded_tags,
                         created.isoformat(),
                         updated.isoformat(),
+                        1 if published else 0,
                     ),
                 )
             except sqlite3.DatabaseError as exc:  # pragma: no cover - defensive
@@ -117,6 +122,7 @@ class Storage:
             tags=normalized_tags,
             created_at=created,
             updated_at=updated,
+            published=published,
         )
 
     def list_notes(self, limit: int = 10) -> Iterable[Note]:
@@ -143,6 +149,7 @@ class Storage:
         *,
         created_at: datetime | None = None,
         updated_at: datetime | None = None,
+        published: bool | None = None,
     ) -> Note:
         title = title.strip()
         body = body.rstrip()
@@ -157,7 +164,8 @@ class Storage:
             cursor = conn.execute(
                 """
                 UPDATE notes
-                SET title = ?, body = ?, description = ?, tags = ?, updated_at = ?
+                SET title = ?, body = ?, description = ?, tags = ?, updated_at = ?,
+                    published = COALESCE(?, published)
                 WHERE id = ?
                 """,
                 (
@@ -166,6 +174,7 @@ class Storage:
                     description,
                     encoded_tags,
                     new_updated.isoformat(),
+                    (1 if published else None),
                     int(note_id),
                 ),
             )
@@ -193,12 +202,8 @@ class Storage:
     def fetch_last_updated_note(self) -> Note:
         with self._connection() as conn:
             cursor = conn.execute(
-                """
-                SELECT id, title, body, description, tags, created_at, updated_at
-                FROM notes
-                ORDER BY updated_at DESC
-                LIMIT 1
-                """
+                f"SELECT {SELECT_COLUMNS} FROM {TABLE_NOTES} "
+                "ORDER BY updated_at DESC LIMIT 1"
             )
             row = cursor.fetchone()
 
@@ -233,13 +238,28 @@ class Storage:
     # Integer primary keys are assigned by SQLite; no manual generation.
 
     def _ensure_columns(self, conn: sqlite3.Connection) -> None:
-        # No migrations performed; greenfield schema expected.
-        pass
+        # Add missing 'published' column for older databases.
+        try:
+            cur = conn.execute("PRAGMA table_info(notes)")
+            cols = {str(r[1]) for r in cur.fetchall()}
+            if "published" not in cols:
+                conn.execute(
+                    "ALTER TABLE notes ADD COLUMN published INTEGER NOT NULL DEFAULT 0"
+                )
+        except sqlite3.DatabaseError as exc:  # pragma: no cover - defensive
+            raise StorageError(f"Failed to ensure schema columns: {exc}") from exc
 
     def _row_to_note(self, row: sqlite3.Row | Sequence[str]) -> Note:
-        note_id, title, body, description, tags_raw, created_at_raw, updated_at_raw = (
-            row
-        )
+        (
+            note_id,
+            title,
+            body,
+            description,
+            tags_raw,
+            created_at_raw,
+            updated_at_raw,
+            published_raw,
+        ) = row
         try:
             tags = tuple(json.loads(tags_raw))
         except json.JSONDecodeError as exc:  # pragma: no cover - defensive
@@ -253,4 +273,5 @@ class Storage:
             tags=tags,
             created_at=datetime.fromisoformat(created_at_raw),
             updated_at=datetime.fromisoformat(updated_at_raw),
+            published=bool(int(published_raw)),
         )
