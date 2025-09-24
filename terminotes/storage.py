@@ -11,7 +11,9 @@ from pathlib import Path
 from typing import Iterable, Iterator, Sequence
 
 DB_FILENAME = "terminotes.sqlite3"
-SELECT_COLUMNS = "id, title, body, description, tags, created_at, updated_at, published"
+SELECT_COLUMNS = (
+    "id, title, body, description, tags, created_at, updated_at, published, type"
+)
 TABLE_NOTES = "notes"
 
 
@@ -27,6 +29,7 @@ class Note:
     created_at: datetime
     updated_at: datetime
     published: bool
+    type: str
 
 
 class StorageError(RuntimeError):
@@ -61,7 +64,8 @@ class Storage:
                     tags TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
-                    published INTEGER NOT NULL DEFAULT 0
+                    published INTEGER NOT NULL DEFAULT 0,
+                    type TEXT NOT NULL DEFAULT 'note'
                 )
                 """
             )
@@ -80,6 +84,7 @@ class Storage:
         created_at: datetime | None = None,
         updated_at: datetime | None = None,
         published: bool = False,
+        note_type: str = "note",
     ) -> Note:
         """Persist a new note and return the resulting ``Note`` instance."""
 
@@ -98,8 +103,8 @@ class Storage:
                 cursor = conn.execute(
                     (
                         "INSERT INTO notes (title, body, description, tags, "
-                        "created_at, updated_at, published) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?)"
+                        "created_at, updated_at, published, type) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
                     ),
                     (
                         title,
@@ -109,6 +114,7 @@ class Storage:
                         created.isoformat(),
                         updated.isoformat(),
                         1 if published else 0,
+                        note_type,
                     ),
                 )
             except sqlite3.DatabaseError as exc:  # pragma: no cover - defensive
@@ -123,6 +129,7 @@ class Storage:
             created_at=created,
             updated_at=updated,
             published=published,
+            type=note_type,
         )
 
     def list_notes(self, limit: int = 10) -> Iterable[Note]:
@@ -150,6 +157,7 @@ class Storage:
         created_at: datetime | None = None,
         updated_at: datetime | None = None,
         published: bool | None = None,
+        note_type: str | None = None,
     ) -> Note:
         title = title.strip()
         body = body.rstrip()
@@ -165,7 +173,8 @@ class Storage:
                 """
                 UPDATE notes
                 SET title = ?, body = ?, description = ?, tags = ?, updated_at = ?,
-                    published = COALESCE(?, published)
+                    published = COALESCE(?, published),
+                    type = COALESCE(?, type)
                 WHERE id = ?
                 """,
                 (
@@ -175,6 +184,7 @@ class Storage:
                     encoded_tags,
                     new_updated.isoformat(),
                     (1 if published else None),
+                    note_type,
                     int(note_id),
                 ),
             )
@@ -246,6 +256,10 @@ class Storage:
                 conn.execute(
                     "ALTER TABLE notes ADD COLUMN published INTEGER NOT NULL DEFAULT 0"
                 )
+            if "type" not in cols:
+                conn.execute(
+                    "ALTER TABLE notes ADD COLUMN type TEXT NOT NULL DEFAULT 'note'"
+                )
         except sqlite3.DatabaseError as exc:  # pragma: no cover - defensive
             raise StorageError(f"Failed to ensure schema columns: {exc}") from exc
 
@@ -259,6 +273,7 @@ class Storage:
             created_at_raw,
             updated_at_raw,
             published_raw,
+            type_raw,
         ) = row
         try:
             tags = tuple(json.loads(tags_raw))
@@ -274,4 +289,5 @@ class Storage:
             created_at=datetime.fromisoformat(created_at_raw),
             updated_at=datetime.fromisoformat(updated_at_raw),
             published=bool(int(published_raw)),
+            type=str(type_raw),
         )

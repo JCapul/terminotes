@@ -41,6 +41,7 @@ def create_via_editor(
         "last_edited": timestamp,
         "tags": [],
         "published": False,
+        "type": "note",
     }
 
     template = render_document(title="", body="", metadata=metadata)
@@ -50,6 +51,7 @@ def create_via_editor(
     final_tags, unknown = _normalize_tags(ctx, parsed.tags)
 
     published_flag = _extract_published(parsed.metadata, default=False)
+    note_type = _extract_type(parsed.metadata, default="note", warn=warn)
 
     created_at_dt = _parse_optional_dt(
         parsed.metadata.get("date"), field="date", warn=warn
@@ -66,6 +68,7 @@ def create_via_editor(
         created_at=created_at_dt,
         updated_at=updated_at_dt,
         published=published_flag,
+        note_type=note_type,
     )
     # Commit the DB update locally (no network interaction).
     ctx.git_sync.commit_db_update(ctx.storage.path, f"chore(db): create note {note.id}")
@@ -100,6 +103,7 @@ def edit_via_editor(
         "date": to_user_friendly_utc(existing.created_at),
         "last_edited": to_user_friendly_utc(existing.updated_at),
         "published": existing.published,
+        "type": existing.type,
     }
     if existing.tags:
         meta["tags"] = list(existing.tags)
@@ -123,6 +127,7 @@ def edit_via_editor(
     )
 
     new_published = _extract_published(parsed.metadata, default=existing.published)
+    new_type = _extract_type(parsed.metadata, default=existing.type, warn=warn)
 
     updated = ctx.storage.update_note(
         target_id,
@@ -133,6 +138,7 @@ def edit_via_editor(
         created_at=created_at_dt,
         updated_at=updated_at_dt,
         published=new_published,
+        note_type=new_type,
     )
     # Commit the DB update locally (no network interaction).
     ctx.git_sync.commit_db_update(
@@ -173,4 +179,17 @@ def _extract_published(metadata: dict[str, object], default: bool) -> bool:
             return True
         if val in {"false", "0", "no", "off"}:
             return False
+    return default
+
+
+def _extract_type(
+    metadata: dict[str, object], default: str, warn: WarnFunc | None
+) -> str:
+    value = metadata.get("type")
+    if isinstance(value, str) and value.strip():
+        v = value.strip().lower()
+        if v in {"note", "log"}:
+            return v
+        if warn is not None:
+            warn("Warning: Unknown 'type' value. Using default 'note'.")
     return default
