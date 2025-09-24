@@ -136,3 +136,23 @@ def ensure_tags_known(config: TerminotesConfig, tags: Iterable[str]) -> None:
     if unknown:
         tag_list = ", ".join(sorted(unknown))
         raise InvalidConfigError(f"Unknown tag(s): {tag_list}")
+
+
+def bootstrap_config_file(path: Path) -> bool:
+    """Create a default config file if missing.
+
+    Returns True when the file was created, False if it already existed.
+    """
+
+    if path.exists():
+        return False
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    default_content = (
+        'git_remote_url = "file:///path/to/notes.git"\n'
+        'terminotes_dir = "notes-repo"\n'
+        "allowed_tags = []\n"
+        'editor = "vim"\n'
+    )
+    path.write_text(default_content, encoding="utf-8")
+    return True
