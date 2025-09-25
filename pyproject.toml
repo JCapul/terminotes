@@ -2,11 +2,24 @@
 name = "terminotes"
 version = "0.1.0"
 description = "Terminal-first notes CLI with SQLite storage and git sync."
+authors = [
+  { name="Julien Capul", email="julien.capul@pm.me" },
+]
 readme = "README.md"
 requires-python = ">=3.13"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
 dependencies = [
     "click>=8.1.7",
 ]
+
+[project.urls]
+Homepage = "https://github.com/jcapul/terminotes"
+Issues = "https://github.com/jcapul/terminotes/issues"
 
 [project.scripts]
 tn = "terminotes.cli:main"

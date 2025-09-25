@@ -1,8 +1,9 @@
 # Terminotes
 
-Terminotes is a terminal-first note taking CLI. It focuses on fast capture from the shell, durable storage in SQLite, and simple Git synchronization so you can keep your notes database in a repo and carry it between machines.
+Terminotes is a terminal-first note taking CLI, 99% vibecoded with Codex CLI and GPT-5 under my tight supervision 😉
 
-• Project status: pre-1.0, APIs/config may change between releases.
+It focuses on fast capture from the shell, durable storage in SQLite, and simple Git synchronization so you can keep your notes database in a repo and carry it between machines.
+
 
 ## Features
 
@@ -10,7 +11,6 @@ Terminotes is a terminal-first note taking CLI. It focuses on fast capture from 
 - SQLite storage with simple schema and safe parameterized queries.
 - Git-backed portability: store the DB in a repo and sync on demand.
 - Practical commands: list, search, delete, info, and sync.
-- Friendly timestamps in UTC for consistency.
 
 ## Requirements
 
