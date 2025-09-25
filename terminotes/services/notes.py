@@ -99,7 +99,7 @@ def create_via_editor(
     return note
 
 
-def edit_via_editor(
+def update_via_editor(
     ctx: AppContext,
     note_id: int | None,
     *,

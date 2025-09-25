@@ -18,7 +18,7 @@ from .config import (
 from .editor import EditorError
 from .editor import open_editor as open_editor
 from .git_sync import GitSync, GitSyncError
-from .services.notes import create_log_entry, create_via_editor, edit_via_editor
+from .services.notes import create_log_entry, create_via_editor, update_via_editor
 from .storage import Storage, StorageError
 
 
@@ -64,28 +64,25 @@ def cli(ctx: click.Context, config_path_opt: Path | None) -> None:
     ctx.obj["app"] = app
 
 
-@cli.command(name="note")
+@cli.command(name="edit")
 @click.option(
-    "--edit",
-    "edit_mode",
-    is_flag=True,
-    help=(
-        "Edit an existing note. When NOTE_ID is provided, edits that note; "
-        "otherwise edits the most recently updated note."
-    ),
+    "--id",
+    "note_id",
+    type=int,
+    default=None,
+    help=("Edit the note with this id. When omitted, a new note is created."),
 )
-@click.argument("note_id", required=False, type=int)
 @click.pass_context
-def note(ctx: click.Context, edit_mode: bool, note_id: int | None) -> None:
+def edit(ctx: click.Context, note_id: int | None) -> None:
     """Create a new note or edit an existing one.
 
-    By default, creates a new note. Use --edit to edit an existing note.
+    By default, creates a new note. Use --id to edit an existing note.
     """
 
     app: AppContext = ctx.obj["app"]
-    if edit_mode:
+    if note_id is not None:
         try:
-            updated = edit_via_editor(
+            updated = update_via_editor(
                 app,
                 note_id,
                 edit_fn=open_editor,
@@ -94,7 +91,7 @@ def note(ctx: click.Context, edit_mode: bool, note_id: int | None) -> None:
         except (EditorError, StorageError, GitSyncError) as exc:
             raise TerminotesCliError(str(exc)) from exc
 
-        click.echo(f"Updated entry #{updated.id} (note)")
+        click.echo(f"Updated note {updated.id}")
         return
 
     # Create new note
@@ -107,7 +104,7 @@ def note(ctx: click.Context, edit_mode: bool, note_id: int | None) -> None:
     except (EditorError, StorageError, GitSyncError) as exc:
         raise TerminotesCliError(str(exc)) from exc
 
-    click.echo(f"Created entry #{note_obj.id} (note)")
+    click.echo(f"Created note {note_obj.id}")
 
 
 @cli.command(name="log")
