@@ -14,6 +14,7 @@ from ..utils.datetime_fmt import (
     parse_user_datetime,
     to_user_friendly_utc,
 )
+from ..utils.tags import extract_hashtags
 
 WarnFunc = Callable[[str], None]
 EditFunc = Callable[[str, str | None], str]
@@ -22,17 +23,12 @@ EditFunc = Callable[[str, str | None], str]
 def create_log_entry(
     ctx: AppContext,
     body: str,
-    tags: Iterable[str] | None = None,
     *,
     warn: WarnFunc | None = None,
 ) -> Note:
-    """Create a new log-type note directly (no editor).
+    """Create a new log-type note directly (no editor)."""
 
-    Aborts (raises ValueError) when provided tags include unknown values.
-    """
-
-    raw_tags = tuple(tags or ())
-    final_tags = _normalize_tags(raw_tags)
+    final_tags = extract_hashtags(body)
 
     note = ctx.storage.create_note(
         title="",
@@ -63,7 +59,6 @@ def create_via_editor(
         "description": "",
         "date": timestamp,
         "last_edited": timestamp,
-        "tags": [],
         "can_publish": False,
         "type": "note",
     }
@@ -72,7 +67,7 @@ def create_via_editor(
     raw = ef(template, editor=ctx.config.editor)
     parsed = parse_document(raw)
 
-    final_tags = _normalize_tags(parsed.tags)
+    final_tags = extract_hashtags(parsed.body)
 
     can_publish_flag = _extract_can_publish(parsed.metadata, default=False)
     note_type = _extract_type(parsed.metadata, default="note", warn=warn)
@@ -101,7 +96,7 @@ def create_via_editor(
 
 def update_via_editor(
     ctx: AppContext,
-    note_id: int | None,
+    note_id: int,
     *,
     edit_fn: EditFunc | None = None,
     warn: WarnFunc | None = None,
@@ -114,7 +109,7 @@ def update_via_editor(
 
     ef = edit_fn or default_open_editor
 
-    if note_id is None:
+    if note_id == -1:
         existing = ctx.storage.fetch_last_updated_note()
         target_id = existing.id
     else:
@@ -138,10 +133,8 @@ def update_via_editor(
     raw = ef(template, editor=ctx.config.editor)
     parsed = parse_document(raw)
 
-    if parsed.tags:
-        final_tags = _normalize_tags(parsed.tags)
-    else:
-        final_tags = existing.tags
+    # Always derive tags from the edited body content
+    final_tags = extract_hashtags(parsed.body)
 
     created_at_dt = _parse_optional_dt(
         parsed.metadata.get("date"), field="date", warn=warn
@@ -174,6 +167,7 @@ def update_via_editor(
 
 
 def _normalize_tags(tags: Iterable[str]) -> tuple[str, ...]:
+    # Deprecated helper retained for safety; prefer extract_hashtags(body).
     return tuple(str(t).strip() for t in tags if str(t).strip())
 
 

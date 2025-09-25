@@ -67,9 +67,8 @@ def test_new_command_creates_note_with_metadata(tmp_path, monkeypatch) -> None:
             'title = "Captured Title"\n'
             'date = "2024-01-01T12:00:00+00:00"\n'
             'last_edited = "2024-01-01T12:00:00+00:00"\n'
-            'tags = ["til", "python"]\n'
             "+++\n\n"
-            "Body from editor.\n"
+            "Body from editor. #til #python\n"
         )
 
     monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
@@ -87,7 +86,7 @@ def test_new_command_creates_note_with_metadata(tmp_path, monkeypatch) -> None:
 
     title, body, tags = _read_single_note(repo_dir / DB_FILENAME)
     assert title == "Captured Title"
-    assert body == "Body from editor."
+    assert body == "Body from editor. #til #python"
     assert tags == ("til", "python")
 
 
@@ -106,7 +105,6 @@ def test_new_command_respects_custom_timestamps(tmp_path, monkeypatch) -> None:
             'title = "Has Timestamps"\n'
             f'date = "{created}"\n'
             f'last_edited = "{updated}"\n'
-            "tags = []\n"
             "+++\n\n"
             "Body.\n"
         )
@@ -141,9 +139,8 @@ def test_edit_command_updates_note_and_metadata(tmp_path, monkeypatch) -> None:
             'title = "Updated Title"\n'
             f'date = "{note.created_at.isoformat()}"\n'
             f'last_edited = "{datetime.now().isoformat()}"\n'
-            'tags = ["python"]\n'
             "+++\n\n"
-            "Updated body.\n"
+            "Updated body. #python\n"
         )
 
     monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
@@ -161,7 +158,7 @@ def test_edit_command_updates_note_and_metadata(tmp_path, monkeypatch) -> None:
 
     title, body, tags = _read_single_note(repo_dir / DB_FILENAME)
     assert title == "Updated Title"
-    assert body == "Updated body."
+    assert body == "Updated body. #python"
     assert tags == ("python",)
 
 
@@ -184,9 +181,8 @@ def test_edit_command_allows_changing_timestamps(tmp_path, monkeypatch) -> None:
             'title = "Title"\n'
             f'date = "{new_created}"\n'
             f'last_edited = "{new_updated}"\n'
-            'tags = ["til"]\n'
             "+++\n\n"
-            "Body updated.\n"
+            "Body updated. #til\n"
         )
 
     monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
@@ -229,9 +225,8 @@ def test_edit_with_last_option_edits_last_updated(tmp_path, monkeypatch) -> None
             'title = "First title updated"\n'
             f'date = "{first.created_at.isoformat()}"\n'
             f'last_edited = "{datetime.now().isoformat()}"\n'
-            'tags = ["python"]\n'
             "+++\n\n"
-            "First body updated via edit.\n"
+            "First body updated via edit. #python\n"
         )
 
     monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
@@ -255,7 +250,7 @@ def test_edit_with_last_option_edits_last_updated(tmp_path, monkeypatch) -> None
 
     assert row is not None
     assert row[0] == "First title updated"
-    assert row[1] == "First body updated via edit."
+    assert row[1] == "First body updated via edit. #python"
     assert tuple(json.loads(row[2])) == ("python",)
 
 
@@ -310,9 +305,8 @@ def test_new_command_accepts_any_tags_without_warning(tmp_path, monkeypatch) -> 
             'title = "Unknown Tags"\n'
             'last_edited = "2024-01-01T00:00:00+00:00"\n'
             'date = "2024-01-01T00:00:00+00:00"\n'
-            'tags = ["not-allowed"]\n'
             "+++\n\n"
-            "Body.\n"
+            "Body. #not-allowed\n"
         )
 
     monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
@@ -325,7 +319,7 @@ def test_new_command_accepts_any_tags_without_warning(tmp_path, monkeypatch) -> 
 
     title, body, tags = _read_single_note(repo_dir / DB_FILENAME)
     assert title == "Unknown Tags"
-    assert body == "Body."
+    assert body == "Body. #not-allowed"
     assert tags == ("not-allowed",)
 
 
@@ -341,9 +335,8 @@ def test_new_command_keeps_all_tags(tmp_path, monkeypatch) -> None:
             'title = "Mixed Tags"\n'
             'last_edited = "2024-01-01T00:00:00+00:00"\n'
             'date = "2024-01-01T00:00:00+00:00"\n'
-            'tags = ["til", "nope"]\n'
             "+++\n\n"
-            "Body.\n"
+            "Body. #til #nope\n"
         )
 
     monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
@@ -356,7 +349,7 @@ def test_new_command_keeps_all_tags(tmp_path, monkeypatch) -> None:
 
     title, body, tags = _read_single_note(repo_dir / DB_FILENAME)
     assert title == "Mixed Tags"
-    assert body == "Body."
+    assert body == "Body. #til #nope"
     assert tags == ("til", "nope")
 
 
@@ -376,9 +369,8 @@ def test_edit_command_accepts_any_tags(tmp_path, monkeypatch) -> None:
             'title = "Title"\n'
             f'date = "{note.created_at.isoformat()}"\n'
             f'last_edited = "{datetime.now().isoformat()}"\n'
-            'tags = ["not-allowed"]\n'
             "+++\n\n"
-            "Body updated.\n"
+            "Body updated. #not-allowed\n"
         )
 
     monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
@@ -416,9 +408,8 @@ def test_edit_command_keeps_all_tags(tmp_path, monkeypatch) -> None:
             'title = "Title"\n'
             f'date = "{note.created_at.isoformat()}"\n'
             f'last_edited = "{datetime.now().isoformat()}"\n'
-            'tags = ["til", "not-allowed"]\n'
             "+++\n\n"
-            "Body updated.\n"
+            "Body updated. #til #not-allowed\n"
         )
 
     monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)

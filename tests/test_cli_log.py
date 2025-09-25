@@ -50,14 +50,14 @@ def test_log_creates_note_with_body_and_tags(tmp_path: Path, monkeypatch) -> Non
 
     runner = CliRunner()
     result = runner.invoke(
-        cli.cli, ["log", "-t", "til,python", "--", "This", "is", "a", "log"]
+        cli.cli, ["log", "--", "This", "is", "a", "log", "#til", "#python"]
     )
 
     assert result.exit_code == 0, result.output
 
     title, body, tags, note_type = _read_single_note(repo_dir / DB_FILENAME)
     assert title == ""
-    assert body == "This is a log"
+    assert body == "This is a log #til #python"
     assert tags == ("til", "python")
     assert note_type == "log"
 
@@ -74,34 +74,31 @@ def test_log_requires_body(tmp_path: Path, monkeypatch) -> None:
     assert "Body is required" in result.output
 
 
-def test_log_accepts_any_tags(tmp_path: Path, monkeypatch) -> None:
+def test_log_extracts_hashtags_from_body(tmp_path: Path, monkeypatch) -> None:
     config_path = _write_config(tmp_path)
     repo_dir = tmp_path / "notes-repo"
     _set_default_paths(config_path, monkeypatch)
     monkeypatch.setattr(GitSync, "ensure_local_clone", lambda self: None)
 
     runner = CliRunner()
-    result = runner.invoke(cli.cli, ["log", "-t", "not-allowed", "--", "Body"])
+    result = runner.invoke(cli.cli, ["log", "--", "Body", "#not-allowed"])
 
     assert result.exit_code == 0, result.output
     title, body, tags, note_type = _read_single_note(repo_dir / DB_FILENAME)
     assert title == ""
-    assert body == "Body"
+    assert body == "Body #not-allowed"
     assert tags == ("not-allowed",)
     assert note_type == "log"
 
 
-def test_log_parses_repeated_and_csv_tags(tmp_path: Path, monkeypatch) -> None:
+def test_log_extracts_multiple_hashtags(tmp_path: Path, monkeypatch) -> None:
     config_path = _write_config(tmp_path)
     repo_dir = tmp_path / "notes-repo"
     _set_default_paths(config_path, monkeypatch)
     monkeypatch.setattr(GitSync, "ensure_local_clone", lambda self: None)
 
     runner = CliRunner()
-    result = runner.invoke(
-        cli.cli,
-        ["log", "-t", "til", "-t", "python", "--", "Body"],
-    )
+    result = runner.invoke(cli.cli, ["log", "--", "Body", "#til", "#python"])
 
     assert result.exit_code == 0, result.output
 

@@ -66,6 +66,7 @@ def cli(ctx: click.Context, config_path_opt: Path | None) -> None:
 
 @cli.command(name="edit")
 @click.option(
+    "-i",
     "--id",
     "note_id",
     type=int,
@@ -91,21 +92,9 @@ def edit(ctx: click.Context, note_id: int | None, edit_last: bool) -> None:
     if note_id is not None and edit_last:
         raise TerminotesCliError("Use only one of --id or --last.")
 
-    if edit_last:
-        try:
-            updated = update_via_editor(
-                app,
-                None,
-                edit_fn=open_editor,
-                warn=lambda msg: click.echo(msg),
-            )
-        except (EditorError, StorageError, GitSyncError) as exc:
-            raise TerminotesCliError(str(exc)) from exc
+    if note_id or edit_last:
+        note_id = -1 if edit_last else note_id
 
-        click.echo(f"Updated note {updated.id}")
-        return
-
-    if note_id is not None:
         try:
             updated = update_via_editor(
                 app,
@@ -133,18 +122,9 @@ def edit(ctx: click.Context, note_id: int | None, edit_last: bool) -> None:
 
 
 @cli.command(name="log")
-@click.option(
-    "-t",
-    "--tags",
-    "tags_opts",
-    multiple=True,
-    help="Tags to apply (repeat or comma-separated)",
-)
 @click.argument("content", nargs=-1)
 @click.pass_context
-def log(
-    ctx: click.Context, tags_opts: tuple[str, ...], content: tuple[str, ...]
-) -> None:
+def log(ctx: click.Context, content: tuple[str, ...]) -> None:
     """Create a new log entry from CLI content.
 
     Usage: tn log -t til -t python -- This is a log entry
@@ -157,14 +137,8 @@ def log(
     if not body:
         raise TerminotesCliError("Body is required for 'tn log'.")
 
-    # Parse tags: support repeated flags and comma-separated values
-    parsed_tags: list[str] = []
-    for raw in tags_opts:
-        parts = [p.strip() for p in raw.split(",")]
-        parsed_tags.extend([p for p in parts if p])
-
     try:
-        note = create_log_entry(app, body, parsed_tags)
+        note = create_log_entry(app, body)
     except (StorageError, GitSyncError) as exc:  # pragma: no cover - pass-through
         raise TerminotesCliError(str(exc)) from exc
 
