@@ -14,7 +14,6 @@ from ..utils.datetime_fmt import (
     parse_user_datetime,
     to_user_friendly_utc,
 )
-from ..utils.tags import extract_hashtags
 
 WarnFunc = Callable[[str], None]
 EditFunc = Callable[[str, str | None], str]
@@ -28,12 +27,9 @@ def create_log_entry(
 ) -> Note:
     """Create a new log-type note directly (no editor)."""
 
-    final_tags = extract_hashtags(body)
-
     note = ctx.storage.create_note(
         title="",
         body=body,
-        tags=final_tags,
         description="",
         can_publish=False,
     )
@@ -65,8 +61,6 @@ def create_via_editor(
     raw = ef(template, editor=ctx.config.editor)
     parsed = parse_document(raw)
 
-    final_tags = extract_hashtags(parsed.body)
-
     can_publish_flag = _extract_can_publish(parsed.metadata, default=False)
 
     created_at_dt = _parse_optional_dt(
@@ -79,7 +73,6 @@ def create_via_editor(
     note = ctx.storage.create_note(
         parsed.title or "",
         parsed.body,
-        final_tags,
         parsed.description,
         created_at=created_at_dt,
         updated_at=updated_at_dt,
@@ -119,17 +112,12 @@ def update_via_editor(
         "last_edited": to_user_friendly_utc(existing.updated_at),
         "can_publish": existing.can_publish,
     }
-    if existing.tags:
-        meta["tags"] = list(existing.tags)
 
     template = render_document(
         title=str(meta["title"]), body=existing.body, metadata=meta
     )  # type: ignore[arg-type]
     raw = ef(template, editor=ctx.config.editor)
     parsed = parse_document(raw)
-
-    # Always derive tags from the edited body content
-    final_tags = extract_hashtags(parsed.body)
 
     created_at_dt = _parse_optional_dt(
         parsed.metadata.get("date"), field="date", warn=warn
@@ -146,7 +134,6 @@ def update_via_editor(
         target_id,
         parsed.title or "",
         parsed.body,
-        final_tags,
         parsed.description,
         created_at=created_at_dt,
         updated_at=updated_at_dt,

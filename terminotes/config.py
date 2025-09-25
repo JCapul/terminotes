@@ -87,8 +87,6 @@ def load_config(path: Path | None = None) -> TerminotesConfig:
     if not git_remote_url:
         raise InvalidConfigError("'git_remote_url' must be a non-empty string")
 
-    # allowed_tags is deprecated and ignored; tags are free-form now.
-
     editor = raw.get("editor")
     if editor is not None and not isinstance(editor, str):
         raise InvalidConfigError("'editor' must be a string when provided")

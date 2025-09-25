@@ -16,7 +16,6 @@ class ParsedEditorNote:
     title: str | None
     body: str
     description: str
-    tags: tuple[str, ...]
     metadata: dict[str, Any]
 
 
@@ -32,17 +31,13 @@ def parse_document(raw: str) -> ParsedEditorNote:
     lines = raw.splitlines()
     if not lines or lines[0].strip() != FRONTMATTER_DELIM:
         stripped = raw.strip()
-        return ParsedEditorNote(
-            title=None, body=stripped, description="", tags=(), metadata={}
-        )
+        return ParsedEditorNote(title=None, body=stripped, description="", metadata={})
 
     try:
         closing_index = lines.index(FRONTMATTER_DELIM, 1)
     except ValueError:
         stripped = raw.strip()
-        return ParsedEditorNote(
-            title=None, body=stripped, description="", tags=(), metadata={}
-        )
+        return ParsedEditorNote(title=None, body=stripped, description="", metadata={})
 
     metadata_block = "\n".join(lines[1:closing_index])
     body = "\n".join(lines[closing_index + 1 :]).strip()
@@ -65,18 +60,8 @@ def parse_document(raw: str) -> ParsedEditorNote:
     if isinstance(description_value, str):
         description = description_value.strip()
 
-    tags_value = metadata.get("tags")
-    tags: tuple[str, ...]
-    if isinstance(tags_value, str):
-        tags_iter = [part.strip() for part in tags_value.split(",") if part.strip()]
-        tags = tuple(tags_iter)
-    elif isinstance(tags_value, Iterable) and not isinstance(tags_value, (str, bytes)):
-        tags = tuple(str(tag).strip() for tag in tags_value if str(tag).strip())
-    else:
-        tags = ()
-
     return ParsedEditorNote(
-        title=title, body=body, description=description, tags=tags, metadata=metadata
+        title=title, body=body, description=description, metadata=metadata
     )
 
 

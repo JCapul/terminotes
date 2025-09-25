@@ -39,7 +39,7 @@ def test_delete_removes_note(tmp_path: Path, monkeypatch) -> None:
 
     storage = Storage(repo_dir / DB_FILENAME)
     storage.initialize()
-    note = storage.create_note("Title", "Body", ["tag"])
+    note = storage.create_note("Title", "Body")
 
     runner = CliRunner()
     result = runner.invoke(cli.cli, ["delete", "--yes", str(note.id)])
@@ -75,7 +75,7 @@ def test_delete_without_yes_prompts_and_can_abort(tmp_path: Path, monkeypatch) -
 
     storage = Storage(repo_dir / DB_FILENAME)
     storage.initialize()
-    note = storage.create_note("Title", "Body", ["tag"])
+    note = storage.create_note("Title", "Body")
 
     runner = CliRunner()
     # Simulate user declining deletion

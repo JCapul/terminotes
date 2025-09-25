@@ -367,9 +367,6 @@ def _prompt_divergence_resolution(ctx: click.Context, state: str) -> str:
     return choice
 
 
-# Removed front matter and tag helpers now in dedicated modules.
-
-
 def _format_config(config: TerminotesConfig) -> str:
     # Render configuration as TOML for consistency.
     def quote(s: str | None) -> str:

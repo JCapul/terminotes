@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -11,9 +10,7 @@ from pathlib import Path
 from typing import Iterable, Iterator, Sequence
 
 DB_FILENAME = "terminotes.sqlite3"
-SELECT_COLUMNS = (
-    "id, title, body, description, tags, created_at, updated_at, can_publish"
-)
+SELECT_COLUMNS = "id, title, body, description, created_at, updated_at, can_publish"
 TABLE_NOTES = "notes"
 
 
@@ -25,7 +22,6 @@ class Note:
     title: str
     body: str
     description: str
-    tags: tuple[str, ...]
     created_at: datetime
     updated_at: datetime
     can_publish: bool
@@ -60,7 +56,6 @@ class Storage:
                     title TEXT NOT NULL,
                     body TEXT NOT NULL,
                     description TEXT NOT NULL,
-                    tags TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
                     can_publish INTEGER NOT NULL DEFAULT 0
@@ -76,7 +71,6 @@ class Storage:
         self,
         title: str,
         body: str,
-        tags: Sequence[str],
         description: str = "",
         *,
         created_at: datetime | None = None,
@@ -90,24 +84,21 @@ class Storage:
         if not (title or body):
             raise StorageError("Cannot create an empty note.")
 
-        normalized_tags = tuple(tags)
         created = created_at or datetime.now(tz=timezone.utc)
         updated = updated_at or created
-        encoded_tags = json.dumps(list(normalized_tags))
 
         with self._connection() as conn:
             try:
                 cursor = conn.execute(
                     (
-                        "INSERT INTO notes (title, body, description, tags, "
+                        "INSERT INTO notes (title, body, description, "
                         "created_at, updated_at, can_publish) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?)"
+                        "VALUES (?, ?, ?, ?, ?, ?)"
                     ),
                     (
                         title,
                         body,
                         description,
-                        encoded_tags,
                         created.isoformat(),
                         updated.isoformat(),
                         1 if can_publish else 0,
@@ -121,7 +112,6 @@ class Storage:
             title=title,
             body=body,
             description=description,
-            tags=normalized_tags,
             created_at=created,
             updated_at=updated,
             can_publish=can_publish,
@@ -146,7 +136,6 @@ class Storage:
         note_id: int,
         title: str,
         body: str,
-        tags: Sequence[str],
         description: str = "",
         *,
         created_at: datetime | None = None,
@@ -160,13 +149,12 @@ class Storage:
 
         # Determine new timestamps
         new_updated = updated_at or datetime.now(tz=timezone.utc)
-        encoded_tags = json.dumps(list(tags))
 
         with self._connection() as conn:
             cursor = conn.execute(
                 """
                 UPDATE notes
-                SET title = ?, body = ?, description = ?, tags = ?, updated_at = ?,
+                SET title = ?, body = ?, description = ?, updated_at = ?,
                     can_publish = COALESCE(?, can_publish)
                 WHERE id = ?
                 """,
@@ -174,7 +162,6 @@ class Storage:
                     title,
                     body,
                     description,
-                    encoded_tags,
                     new_updated.isoformat(),
                     (None if can_publish is None else (1 if can_publish else 0)),
                     int(note_id),
@@ -262,22 +249,16 @@ class Storage:
             title,
             body,
             description,
-            tags_raw,
             created_at_raw,
             updated_at_raw,
             can_publish_raw,
         ) = row
-        try:
-            tags = tuple(json.loads(tags_raw))
-        except json.JSONDecodeError as exc:  # pragma: no cover - defensive
-            raise StorageError("Stored tags payload is corrupted.") from exc
 
         return Note(
             id=int(note_id),
             title=title,
             body=body,
             description=description,
-            tags=tags,
             created_at=datetime.fromisoformat(created_at_raw),
             updated_at=datetime.fromisoformat(updated_at_raw),
             can_publish=bool(int(can_publish_raw)),

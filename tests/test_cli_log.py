@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import sqlite3
 from pathlib import Path
 
@@ -34,12 +33,12 @@ def _set_default_paths(config_path: Path, monkeypatch) -> None:
     )
 
 
-def _read_single_note(db_path: Path) -> tuple[str, str, tuple[str, ...]]:
+def _read_single_note(db_path: Path) -> tuple[str, str]:
     conn = sqlite3.connect(db_path)
-    row = conn.execute("SELECT title, body, tags FROM notes").fetchone()
+    row = conn.execute("SELECT title, body FROM notes").fetchone()
     conn.close()
     assert row is not None
-    return row[0], row[1], tuple(json.loads(row[2]))
+    return row[0], row[1]
 
 
 def test_log_creates_note_with_body_and_tags(tmp_path: Path, monkeypatch) -> None:
@@ -55,11 +54,9 @@ def test_log_creates_note_with_body_and_tags(tmp_path: Path, monkeypatch) -> Non
 
     assert result.exit_code == 0, result.output
 
-    title, body, tags = _read_single_note(repo_dir / DB_FILENAME)
+    title, body = _read_single_note(repo_dir / DB_FILENAME)
     assert title == ""
     assert body == "This is a log #til #python"
-    assert tags == ("til", "python")
-    # type metadata removed
 
 
 def test_log_with_message_option_handles_hashtags(tmp_path: Path, monkeypatch) -> None:
@@ -74,11 +71,9 @@ def test_log_with_message_option_handles_hashtags(tmp_path: Path, monkeypatch) -
 
     assert result.exit_code == 0, result.output
 
-    title, body, tags = _read_single_note(repo_dir / DB_FILENAME)
+    title, body = _read_single_note(repo_dir / DB_FILENAME)
     assert title == ""
     assert body == msg
-    assert tags == ("python",)
-    # type metadata removed
 
 
 def test_log_requires_body(tmp_path: Path, monkeypatch) -> None:
@@ -91,36 +86,3 @@ def test_log_requires_body(tmp_path: Path, monkeypatch) -> None:
 
     assert result.exit_code == 1
     assert "Body is required" in result.output
-
-
-def test_log_extracts_hashtags_from_body(tmp_path: Path, monkeypatch) -> None:
-    config_path = _write_config(tmp_path)
-    repo_dir = tmp_path / "notes-repo"
-    _set_default_paths(config_path, monkeypatch)
-    monkeypatch.setattr(GitSync, "ensure_local_clone", lambda self: None)
-
-    runner = CliRunner()
-    result = runner.invoke(cli.cli, ["log", "--", "Body", "#not-allowed"])
-
-    assert result.exit_code == 0, result.output
-    title, body, tags = _read_single_note(repo_dir / DB_FILENAME)
-    assert title == ""
-    assert body == "Body #not-allowed"
-    assert tags == ("not-allowed",)
-    # type metadata removed
-
-
-def test_log_extracts_multiple_hashtags(tmp_path: Path, monkeypatch) -> None:
-    config_path = _write_config(tmp_path)
-    repo_dir = tmp_path / "notes-repo"
-    _set_default_paths(config_path, monkeypatch)
-    monkeypatch.setattr(GitSync, "ensure_local_clone", lambda self: None)
-
-    runner = CliRunner()
-    result = runner.invoke(cli.cli, ["log", "--", "Body", "#til", "#python"])
-
-    assert result.exit_code == 0, result.output
-
-    _, _, tags = _read_single_note(repo_dir / DB_FILENAME)
-    assert tags == ("til", "python")
-    # type metadata removed

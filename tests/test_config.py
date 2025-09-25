@@ -55,11 +55,6 @@ def test_load_config_missing_file(tmp_path: Path) -> None:
         load_config(missing)
 
 
-def test_load_config_rejects_empty_tags(tmp_path: Path) -> None:
-    # Deprecated: allowed_tags no longer validated; this test is obsolete.
-    pass
-
-
 def test_git_remote_url_is_required(tmp_path: Path) -> None:
     # Missing key
     config_path = write_config(

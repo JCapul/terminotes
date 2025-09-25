@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import sqlite3
 import tomllib
 from datetime import datetime
@@ -36,12 +35,12 @@ def _set_default_paths(config_path: Path, monkeypatch) -> None:
     )
 
 
-def _read_single_note(db_path: Path) -> tuple[str, str, tuple[str, ...]]:
+def _read_single_note(db_path: Path) -> tuple[str, str]:
     conn = sqlite3.connect(db_path)
-    row = conn.execute("SELECT title, body, tags FROM notes").fetchone()
+    row = conn.execute("SELECT title, body FROM notes").fetchone()
     conn.close()
     assert row is not None
-    return row[0], row[1], tuple(json.loads(row[2]))
+    return row[0], row[1]
 
 
 def _read_single_note_timestamps(db_path: Path) -> tuple[datetime, datetime]:
@@ -84,10 +83,9 @@ def test_new_command_creates_note_with_metadata(tmp_path, monkeypatch) -> None:
     assert "date" in metadata
     assert "last_edited" in metadata
 
-    title, body, tags = _read_single_note(repo_dir / DB_FILENAME)
+    title, body = _read_single_note(repo_dir / DB_FILENAME)
     assert title == "Captured Title"
     assert body == "Body from editor. #til #python"
-    assert tags == ("til", "python")
 
 
 def test_new_command_respects_custom_timestamps(tmp_path, monkeypatch) -> None:
@@ -128,7 +126,7 @@ def test_edit_command_updates_note_and_metadata(tmp_path, monkeypatch) -> None:
 
     storage = Storage(repo_dir / DB_FILENAME)
     storage.initialize()
-    note = storage.create_note("Existing Title", "Body", ["til"])
+    note = storage.create_note("Existing Title", "Body")
 
     captured_template: dict[str, str] = {}
 
@@ -156,10 +154,9 @@ def test_edit_command_updates_note_and_metadata(tmp_path, monkeypatch) -> None:
     assert metadata["title"] == "Existing Title"
     assert "last_edited" in metadata
 
-    title, body, tags = _read_single_note(repo_dir / DB_FILENAME)
+    title, body = _read_single_note(repo_dir / DB_FILENAME)
     assert title == "Updated Title"
     assert body == "Updated body. #python"
-    assert tags == ("python",)
 
 
 def test_edit_command_allows_changing_timestamps(tmp_path, monkeypatch) -> None:
@@ -170,7 +167,7 @@ def test_edit_command_allows_changing_timestamps(tmp_path, monkeypatch) -> None:
 
     storage = Storage(repo_dir / DB_FILENAME)
     storage.initialize()
-    note = storage.create_note("Title", "Body", ["til"])
+    note = storage.create_note("Title", "Body")
 
     new_created = "2020-05-05T05:05:05+00:00"
     new_updated = "2021-06-06T06:06:06+00:00"
@@ -210,11 +207,11 @@ def test_edit_with_last_option_edits_last_updated(tmp_path, monkeypatch) -> None
 
     storage = Storage(repo_dir / DB_FILENAME)
     storage.initialize()
-    first = storage.create_note("First title", "First body", ["til"])
-    storage.create_note("Second title", "Second body", ["python"])
+    first = storage.create_note("First title", "First body")
+    storage.create_note("Second title", "Second body")
 
     # Update first note to ensure it becomes the most recently edited entry.
-    storage.update_note(first.id, "First title", "First body updated", ["til"])
+    storage.update_note(first.id, "First title", "First body updated")
 
     captured_template: dict[str, str] = {}
 
@@ -243,7 +240,7 @@ def test_edit_with_last_option_edits_last_updated(tmp_path, monkeypatch) -> None
 
     conn = sqlite3.connect(repo_dir / DB_FILENAME)
     row = conn.execute(
-        "SELECT title, body, tags FROM notes WHERE id = ?",
+        "SELECT title, body FROM notes WHERE id = ?",
         (first.id,),
     ).fetchone()
     conn.close()
@@ -251,7 +248,6 @@ def test_edit_with_last_option_edits_last_updated(tmp_path, monkeypatch) -> None
     assert row is not None
     assert row[0] == "First title updated"
     assert row[1] == "First body updated via edit. #python"
-    assert tuple(json.loads(row[2])) == ("python",)
 
 
 ## Behavior change: without --id, a new note is created instead of editing last updated.
@@ -289,148 +285,6 @@ def test_config_command_bootstraps_when_missing(tmp_path, monkeypatch) -> None:
     assert config_path.exists()
 
 
-## Git URL is now mandatory; local-only mode removed.
-
-
-def test_new_command_accepts_any_tags_without_warning(tmp_path, monkeypatch) -> None:
-    # Tag validation removed; editor returns a tag not in config and it is accepted.
-    config_path = _write_config(tmp_path)
-    repo_dir = tmp_path / "notes-repo"
-    _set_default_paths(config_path, monkeypatch)
-    monkeypatch.setattr(GitSync, "ensure_local_clone", lambda self: None)
-
-    def fake_editor(template: str, editor: str | None = None) -> str:
-        return (
-            "+++\n"
-            'title = "Unknown Tags"\n'
-            'last_edited = "2024-01-01T00:00:00+00:00"\n'
-            'date = "2024-01-01T00:00:00+00:00"\n'
-            "+++\n\n"
-            "Body. #not-allowed\n"
-        )
-
-    monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
-
-    runner = CliRunner()
-    result = runner.invoke(cli.cli, ["edit"])
-
-    assert result.exit_code == 0, result.output
-    assert "Warning:" not in result.output
-
-    title, body, tags = _read_single_note(repo_dir / DB_FILENAME)
-    assert title == "Unknown Tags"
-    assert body == "Body. #not-allowed"
-    assert tags == ("not-allowed",)
-
-
-def test_new_command_keeps_all_tags(tmp_path, monkeypatch) -> None:
-    config_path = _write_config(tmp_path)
-    repo_dir = tmp_path / "notes-repo"
-    _set_default_paths(config_path, monkeypatch)
-    monkeypatch.setattr(GitSync, "ensure_local_clone", lambda self: None)
-
-    def fake_editor(template: str, editor: str | None = None) -> str:
-        return (
-            "+++\n"
-            'title = "Mixed Tags"\n'
-            'last_edited = "2024-01-01T00:00:00+00:00"\n'
-            'date = "2024-01-01T00:00:00+00:00"\n'
-            "+++\n\n"
-            "Body. #til #nope\n"
-        )
-
-    monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
-
-    runner = CliRunner()
-    result = runner.invoke(cli.cli, ["edit"])
-
-    assert result.exit_code == 0, result.output
-    assert "Warning:" not in result.output
-
-    title, body, tags = _read_single_note(repo_dir / DB_FILENAME)
-    assert title == "Mixed Tags"
-    assert body == "Body. #til #nope"
-    assert tags == ("til", "nope")
-
-
-def test_edit_command_accepts_any_tags(tmp_path, monkeypatch) -> None:
-    config_path = _write_config(tmp_path)
-    repo_dir = tmp_path / "notes-repo"
-    _set_default_paths(config_path, monkeypatch)
-    monkeypatch.setattr(GitSync, "ensure_local_clone", lambda self: None)
-
-    storage = Storage(repo_dir / DB_FILENAME)
-    storage.initialize()
-    note = storage.create_note("Title", "Body", ["til"])
-
-    def fake_editor(template: str, editor: str | None = None) -> str:
-        return (
-            "+++\n"
-            'title = "Title"\n'
-            f'date = "{note.created_at.isoformat()}"\n'
-            f'last_edited = "{datetime.now().isoformat()}"\n'
-            "+++\n\n"
-            "Body updated. #not-allowed\n"
-        )
-
-    monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
-
-    runner = CliRunner()
-    result = runner.invoke(cli.cli, ["edit", "--id", str(note.id)])
-
-    assert result.exit_code == 0, result.output
-    assert "Warning:" not in result.output
-
-    conn = sqlite3.connect(repo_dir / DB_FILENAME)
-    row = conn.execute(
-        "SELECT tags FROM notes WHERE id = ?",
-        (note.id,),
-    ).fetchone()
-    conn.close()
-
-    assert row is not None
-    assert tuple(json.loads(row[0])) == ("not-allowed",)
-
-
-def test_edit_command_keeps_all_tags(tmp_path, monkeypatch) -> None:
-    config_path = _write_config(tmp_path)
-    repo_dir = tmp_path / "notes-repo"
-    _set_default_paths(config_path, monkeypatch)
-    monkeypatch.setattr(GitSync, "ensure_local_clone", lambda self: None)
-
-    storage = Storage(repo_dir / DB_FILENAME)
-    storage.initialize()
-    note = storage.create_note("Title", "Body", ["til"])
-
-    def fake_editor(template: str, editor: str | None = None) -> str:
-        return (
-            "+++\n"
-            'title = "Title"\n'
-            f'date = "{note.created_at.isoformat()}"\n'
-            f'last_edited = "{datetime.now().isoformat()}"\n'
-            "+++\n\n"
-            "Body updated. #til #not-allowed\n"
-        )
-
-    monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
-
-    runner = CliRunner()
-    result = runner.invoke(cli.cli, ["edit", "--id", str(note.id)])
-
-    assert result.exit_code == 0, result.output
-    assert "Warning:" not in result.output
-
-    conn = sqlite3.connect(repo_dir / DB_FILENAME)
-    row = conn.execute(
-        "SELECT tags FROM notes WHERE id = ?",
-        (note.id,),
-    ).fetchone()
-    conn.close()
-
-    assert row is not None
-    assert tuple(json.loads(row[0])) == ("til", "not-allowed")
-
-
 def test_info_command_displays_repo_and_config(tmp_path, monkeypatch, capsys) -> None:
     config_path = _write_config(tmp_path)
     repo_dir = tmp_path / "notes-repo"
@@ -439,7 +293,7 @@ def test_info_command_displays_repo_and_config(tmp_path, monkeypatch, capsys) ->
 
     storage = Storage(repo_dir / DB_FILENAME)
     storage.initialize()
-    storage.create_note("Info title", "Info body", ["til"])
+    storage.create_note("Info title", "Info body")
 
     runner = CliRunner()
     result = runner.invoke(cli.cli, ["info"])
