@@ -72,14 +72,39 @@ def cli(ctx: click.Context, config_path_opt: Path | None) -> None:
     default=None,
     help=("Edit the note with this id. When omitted, a new note is created."),
 )
+@click.option(
+    "-l",
+    "--last",
+    "edit_last",
+    is_flag=True,
+    help="Edit the last updated note (mutually exclusive with --id)",
+)
 @click.pass_context
-def edit(ctx: click.Context, note_id: int | None) -> None:
+def edit(ctx: click.Context, note_id: int | None, edit_last: bool) -> None:
     """Create a new note or edit an existing one.
 
     By default, creates a new note. Use --id to edit an existing note.
     """
 
     app: AppContext = ctx.obj["app"]
+
+    if note_id is not None and edit_last:
+        raise TerminotesCliError("Use only one of --id or --last.")
+
+    if edit_last:
+        try:
+            updated = update_via_editor(
+                app,
+                None,
+                edit_fn=open_editor,
+                warn=lambda msg: click.echo(msg),
+            )
+        except (EditorError, StorageError, GitSyncError) as exc:
+            raise TerminotesCliError(str(exc)) from exc
+
+        click.echo(f"Updated note {updated.id}")
+        return
+
     if note_id is not None:
         try:
             updated = update_via_editor(
@@ -143,7 +168,7 @@ def log(
     except (StorageError, GitSyncError) as exc:  # pragma: no cover - pass-through
         raise TerminotesCliError(str(exc)) from exc
 
-    click.echo(f"Created entry #{note.id} (log)")
+    click.echo(f"Created note {note.id}")
 
 
 @cli.command()

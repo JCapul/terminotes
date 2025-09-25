@@ -206,6 +206,59 @@ def test_edit_command_allows_changing_timestamps(tmp_path, monkeypatch) -> None:
     assert datetime.fromisoformat(row[1]) == datetime.fromisoformat(new_updated)
 
 
+def test_edit_with_last_option_edits_last_updated(tmp_path, monkeypatch) -> None:
+    config_path = _write_config(tmp_path)
+    repo_dir = tmp_path / "notes-repo"
+    _set_default_paths(config_path, monkeypatch)
+    monkeypatch.setattr(GitSync, "ensure_local_clone", lambda self: None)
+
+    storage = Storage(repo_dir / DB_FILENAME)
+    storage.initialize()
+    first = storage.create_note("First title", "First body", ["til"])
+    storage.create_note("Second title", "Second body", ["python"])
+
+    # Update first note to ensure it becomes the most recently edited entry.
+    storage.update_note(first.id, "First title", "First body updated", ["til"])
+
+    captured_template: dict[str, str] = {}
+
+    def fake_editor(template: str, editor: str | None = None) -> str:
+        captured_template["value"] = template
+        return (
+            "+++\n"
+            'title = "First title updated"\n'
+            f'date = "{first.created_at.isoformat()}"\n'
+            f'last_edited = "{datetime.now().isoformat()}"\n'
+            'tags = ["python"]\n'
+            "+++\n\n"
+            "First body updated via edit.\n"
+        )
+
+    monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
+
+    runner = CliRunner()
+    result = runner.invoke(cli.cli, ["edit", "--last"])
+
+    assert result.exit_code == 0, result.output
+
+    template = captured_template["value"]
+    metadata_block = template.split("+++\n", 2)[1].split("\n+++", 1)[0]
+    metadata = tomllib.loads(metadata_block)
+    assert metadata["title"] == "First title"
+
+    conn = sqlite3.connect(repo_dir / DB_FILENAME)
+    row = conn.execute(
+        "SELECT title, body, tags FROM notes WHERE id = ?",
+        (first.id,),
+    ).fetchone()
+    conn.close()
+
+    assert row is not None
+    assert row[0] == "First title updated"
+    assert row[1] == "First body updated via edit."
+    assert tuple(json.loads(row[2])) == ("python",)
+
+
 ## Behavior change: without --id, a new note is created instead of editing last updated.
 
 
