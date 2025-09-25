@@ -34,12 +34,12 @@ def _set_default_paths(config_path: Path, monkeypatch) -> None:
     )
 
 
-def _read_single_note(db_path: Path) -> tuple[str, str, tuple[str, ...], str]:
+def _read_single_note(db_path: Path) -> tuple[str, str, tuple[str, ...]]:
     conn = sqlite3.connect(db_path)
-    row = conn.execute("SELECT title, body, tags, type FROM notes").fetchone()
+    row = conn.execute("SELECT title, body, tags FROM notes").fetchone()
     conn.close()
     assert row is not None
-    return row[0], row[1], tuple(json.loads(row[2])), str(row[3])
+    return row[0], row[1], tuple(json.loads(row[2]))
 
 
 def test_log_creates_note_with_body_and_tags(tmp_path: Path, monkeypatch) -> None:
@@ -55,11 +55,11 @@ def test_log_creates_note_with_body_and_tags(tmp_path: Path, monkeypatch) -> Non
 
     assert result.exit_code == 0, result.output
 
-    title, body, tags, note_type = _read_single_note(repo_dir / DB_FILENAME)
+    title, body, tags = _read_single_note(repo_dir / DB_FILENAME)
     assert title == ""
     assert body == "This is a log #til #python"
     assert tags == ("til", "python")
-    assert note_type == "log"
+    # type metadata removed
 
 
 def test_log_with_message_option_handles_hashtags(tmp_path: Path, monkeypatch) -> None:
@@ -74,11 +74,11 @@ def test_log_with_message_option_handles_hashtags(tmp_path: Path, monkeypatch) -
 
     assert result.exit_code == 0, result.output
 
-    title, body, tags, note_type = _read_single_note(repo_dir / DB_FILENAME)
+    title, body, tags = _read_single_note(repo_dir / DB_FILENAME)
     assert title == ""
     assert body == msg
     assert tags == ("python",)
-    assert note_type == "log"
+    # type metadata removed
 
 
 def test_log_requires_body(tmp_path: Path, monkeypatch) -> None:
@@ -103,11 +103,11 @@ def test_log_extracts_hashtags_from_body(tmp_path: Path, monkeypatch) -> None:
     result = runner.invoke(cli.cli, ["log", "--", "Body", "#not-allowed"])
 
     assert result.exit_code == 0, result.output
-    title, body, tags, note_type = _read_single_note(repo_dir / DB_FILENAME)
+    title, body, tags = _read_single_note(repo_dir / DB_FILENAME)
     assert title == ""
     assert body == "Body #not-allowed"
     assert tags == ("not-allowed",)
-    assert note_type == "log"
+    # type metadata removed
 
 
 def test_log_extracts_multiple_hashtags(tmp_path: Path, monkeypatch) -> None:
@@ -121,6 +121,6 @@ def test_log_extracts_multiple_hashtags(tmp_path: Path, monkeypatch) -> None:
 
     assert result.exit_code == 0, result.output
 
-    _, _, tags, note_type = _read_single_note(repo_dir / DB_FILENAME)
+    _, _, tags = _read_single_note(repo_dir / DB_FILENAME)
     assert tags == ("til", "python")
-    assert note_type == "log"
+    # type metadata removed

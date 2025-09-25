@@ -36,7 +36,6 @@ def create_log_entry(
         tags=final_tags,
         description="",
         can_publish=False,
-        note_type="log",
     )
     # Commit the DB update locally (no network interaction).
     ctx.git_sync.commit_db_update(ctx.storage.path, f"chore(db): create log {note.id}")
@@ -60,7 +59,6 @@ def create_via_editor(
         "date": timestamp,
         "last_edited": timestamp,
         "can_publish": False,
-        "type": "note",
     }
 
     template = render_document(title="", body="", metadata=metadata)
@@ -70,7 +68,6 @@ def create_via_editor(
     final_tags = extract_hashtags(parsed.body)
 
     can_publish_flag = _extract_can_publish(parsed.metadata, default=False)
-    note_type = _extract_type(parsed.metadata, default="note", warn=warn)
 
     created_at_dt = _parse_optional_dt(
         parsed.metadata.get("date"), field="date", warn=warn
@@ -87,7 +84,6 @@ def create_via_editor(
         created_at=created_at_dt,
         updated_at=updated_at_dt,
         can_publish=can_publish_flag,
-        note_type=note_type,
     )
     # Commit the DB update locally (no network interaction).
     ctx.git_sync.commit_db_update(ctx.storage.path, f"chore(db): create note {note.id}")
@@ -122,7 +118,6 @@ def update_via_editor(
         "date": to_user_friendly_utc(existing.created_at),
         "last_edited": to_user_friendly_utc(existing.updated_at),
         "can_publish": existing.can_publish,
-        "type": existing.type,
     }
     if existing.tags:
         meta["tags"] = list(existing.tags)
@@ -146,7 +141,6 @@ def update_via_editor(
     new_can_publish = _extract_can_publish(
         parsed.metadata, default=existing.can_publish
     )
-    new_type = _extract_type(parsed.metadata, default=existing.type, warn=warn)
 
     updated = ctx.storage.update_note(
         target_id,
@@ -157,7 +151,6 @@ def update_via_editor(
         created_at=created_at_dt,
         updated_at=updated_at_dt,
         can_publish=new_can_publish,
-        note_type=new_type,
     )
     # Commit the DB update locally (no network interaction).
     ctx.git_sync.commit_db_update(
@@ -200,14 +193,4 @@ def _extract_can_publish(metadata: dict[str, object], default: bool) -> bool:
     return default
 
 
-def _extract_type(
-    metadata: dict[str, object], default: str, warn: WarnFunc | None
-) -> str:
-    value = metadata.get("type")
-    if isinstance(value, str) and value.strip():
-        v = value.strip().lower()
-        if v in {"note", "log"}:
-            return v
-        if warn is not None:
-            warn("Warning: Unknown 'type' value. Using default 'note'.")
-    return default
+# 'type' metadata removed; no extraction required.

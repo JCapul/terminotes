@@ -12,7 +12,7 @@ from typing import Iterable, Iterator, Sequence
 
 DB_FILENAME = "terminotes.sqlite3"
 SELECT_COLUMNS = (
-    "id, title, body, description, tags, created_at, updated_at, can_publish, type"
+    "id, title, body, description, tags, created_at, updated_at, can_publish"
 )
 TABLE_NOTES = "notes"
 
@@ -29,7 +29,6 @@ class Note:
     created_at: datetime
     updated_at: datetime
     can_publish: bool
-    type: str
 
 
 class StorageError(RuntimeError):
@@ -64,8 +63,7 @@ class Storage:
                     tags TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
-                    can_publish INTEGER NOT NULL DEFAULT 0,
-                    type TEXT NOT NULL DEFAULT 'note'
+                    can_publish INTEGER NOT NULL DEFAULT 0
                 )
                 """
             )
@@ -84,7 +82,6 @@ class Storage:
         created_at: datetime | None = None,
         updated_at: datetime | None = None,
         can_publish: bool = False,
-        note_type: str = "note",
     ) -> Note:
         """Persist a new note and return the resulting ``Note`` instance."""
 
@@ -103,8 +100,8 @@ class Storage:
                 cursor = conn.execute(
                     (
                         "INSERT INTO notes (title, body, description, tags, "
-                        "created_at, updated_at, can_publish, type) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                        "created_at, updated_at, can_publish) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?)"
                     ),
                     (
                         title,
@@ -114,7 +111,6 @@ class Storage:
                         created.isoformat(),
                         updated.isoformat(),
                         1 if can_publish else 0,
-                        note_type,
                     ),
                 )
             except sqlite3.DatabaseError as exc:  # pragma: no cover - defensive
@@ -129,7 +125,6 @@ class Storage:
             created_at=created,
             updated_at=updated,
             can_publish=can_publish,
-            type=note_type,
         )
 
     def list_notes(self, limit: int = 10) -> Iterable[Note]:
@@ -157,7 +152,6 @@ class Storage:
         created_at: datetime | None = None,
         updated_at: datetime | None = None,
         can_publish: bool | None = None,
-        note_type: str | None = None,
     ) -> Note:
         title = title.strip()
         body = body.rstrip()
@@ -173,8 +167,7 @@ class Storage:
                 """
                 UPDATE notes
                 SET title = ?, body = ?, description = ?, tags = ?, updated_at = ?,
-                    can_publish = COALESCE(?, can_publish),
-                    type = COALESCE(?, type)
+                    can_publish = COALESCE(?, can_publish)
                 WHERE id = ?
                 """,
                 (
@@ -184,7 +177,6 @@ class Storage:
                     encoded_tags,
                     new_updated.isoformat(),
                     (None if can_publish is None else (1 if can_publish else 0)),
-                    note_type,
                     int(note_id),
                 ),
             )
@@ -265,7 +257,7 @@ class Storage:
 
         - Adds missing 'can_publish' column (renamed from legacy 'published').
         - Copies legacy values from 'published' into 'can_publish' when upgrading.
-        - Ensures 'type' column exists.
+        - Drops legacy 'type' column by migrating table when present.
         """
         try:
             cur = conn.execute("PRAGMA table_info(notes)")
@@ -281,11 +273,6 @@ class Storage:
                 )
                 added_can_publish = True
 
-            if "type" not in cols:
-                conn.execute(
-                    "ALTER TABLE notes ADD COLUMN type TEXT NOT NULL DEFAULT 'note'"
-                )
-
             # If upgrading from legacy schema where 'published' existed, migrate values.
             if added_can_publish and "published" in cols:
                 try:
@@ -293,6 +280,38 @@ class Storage:
                 except sqlite3.DatabaseError:
                     # Best-effort migration; ignore if legacy column missing.
                     pass
+
+            # If legacy 'type' column exists, migrate to a table without it.
+            if "type" in cols:
+                # Create new table without 'type'.
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS notes__migrate (
+                        id INTEGER PRIMARY KEY,
+                        title TEXT NOT NULL,
+                        body TEXT NOT NULL,
+                        description TEXT NOT NULL,
+                        tags TEXT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL,
+                        can_publish INTEGER NOT NULL DEFAULT 0
+                    )
+                    """
+                )
+                # Copy data across, ignoring 'type'.
+                conn.execute(
+                    (
+                        "INSERT INTO notes__migrate ("
+                        "id, title, body, description, tags, "
+                        "created_at, updated_at, can_publish"
+                        ") "
+                        "SELECT id, title, body, description, tags, "
+                        "created_at, updated_at, COALESCE(can_publish, 0) "
+                        "FROM notes"
+                    )
+                )
+                conn.execute("DROP TABLE notes")
+                conn.execute("ALTER TABLE notes__migrate RENAME TO notes")
         except sqlite3.DatabaseError as exc:  # pragma: no cover - defensive
             raise StorageError(f"Failed to ensure schema columns: {exc}") from exc
 
@@ -306,7 +325,6 @@ class Storage:
             created_at_raw,
             updated_at_raw,
             can_publish_raw,
-            type_raw,
         ) = row
         try:
             tags = tuple(json.loads(tags_raw))
@@ -322,5 +340,4 @@ class Storage:
             created_at=datetime.fromisoformat(created_at_raw),
             updated_at=datetime.fromisoformat(updated_at_raw),
             can_publish=bool(int(can_publish_raw)),
-            type=str(type_raw),
         )
