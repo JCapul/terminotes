@@ -20,6 +20,7 @@ from .editor import open_editor as open_editor
 from .git_sync import GitSync, GitSyncError
 from .services.notes import create_log_entry, create_via_editor, update_via_editor
 from .storage import Storage, StorageError
+from .utils.datetime_fmt import to_user_friendly_utc
 
 
 class TerminotesCliError(click.ClickException):
@@ -291,20 +292,73 @@ def config(ctx: click.Context) -> None:
 
 
 @cli.command()
+@click.option("-n", "--limit", type=int, default=10, help="Maximum notes to list")
+@click.option(
+    "-r",
+    "--reverse",
+    is_flag=True,
+    help="Reverse order (oldest first for current sort)",
+)
 @click.pass_context
-def ls(ctx: click.Context) -> None:  # pragma: no cover - placeholder
-    """List the most recent notes."""
+def ls(ctx: click.Context, limit: int, reverse: bool) -> None:
+    """List the most recent notes (by last edit time)."""
 
-    click.echo("Subcommand 'ls' is not implemented yet.")
+    app: AppContext = ctx.obj["app"]
+    storage: Storage = app.storage
+
+    try:
+        notes = list(storage.list_notes(limit=limit))
+    except StorageError as exc:  # pragma: no cover - pass-through
+        raise TerminotesCliError(str(exc)) from exc
+
+    if reverse:
+        notes = list(reversed(notes))
+
+    for n in notes:
+        updated = to_user_friendly_utc(n.updated_at)
+        title = n.title or ""
+        click.echo(f"{n.id:>4}  {updated}  {title}")
 
 
 @cli.command()
 @click.argument("pattern")
+@click.option("-n", "--limit", type=int, default=20, help="Maximum matches to show")
+@click.option(
+    "-r",
+    "--reverse",
+    is_flag=True,
+    help="Reverse order (oldest first for current sort)",
+)
 @click.pass_context
-def search(ctx: click.Context, pattern: str) -> None:  # pragma: no cover
-    """Search notes for a pattern."""
+def search(ctx: click.Context, pattern: str, limit: int, reverse: bool) -> None:
+    """Search notes for a pattern (case-insensitive substring)."""
 
-    click.echo(f"Subcommand 'search' is not implemented yet (pattern: {pattern}).")
+    app: AppContext = ctx.obj["app"]
+    storage: Storage = app.storage
+
+    pat = (pattern or "").strip()
+    if not pat:
+        raise TerminotesCliError("Search pattern must not be empty.")
+
+    try:
+        matches = list(storage.search_notes(pat))
+    except StorageError as exc:  # pragma: no cover - pass-through
+        raise TerminotesCliError(str(exc)) from exc
+
+    # Order is already updated_at DESC; apply reverse if requested
+    if reverse:
+        matches = list(reversed(matches))
+
+    # Apply limit after ordering (simple approach for now)
+    if limit > 0:
+        matches = matches[:limit]
+    else:
+        matches = []
+
+    for n in matches:
+        updated = to_user_friendly_utc(n.updated_at)
+        title = n.title or ""
+        click.echo(f"{n.id:>4}  {updated}  {title}")
 
 
 @cli.command()

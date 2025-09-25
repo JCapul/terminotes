@@ -41,6 +41,22 @@ def _read_single_note(db_path: Path) -> tuple[str, str]:
     return row[0], row[1]
 
 
+def test_log_derives_title_from_first_sentence(tmp_path: Path, monkeypatch) -> None:
+    config_path = _write_config(tmp_path)
+    repo_dir = tmp_path / "notes-repo"
+    _set_default_paths(config_path, monkeypatch)
+    monkeypatch.setattr(GitSync, "ensure_local_clone", lambda self: None)
+
+    runner = CliRunner()
+    body = "Hello world! Second sentence with more details and #tags. And more."
+    result = runner.invoke(cli.cli, ["log", "--message", body])
+    assert result.exit_code == 0, result.output
+
+    title, stored_body = _read_single_note(repo_dir / DB_FILENAME)
+    assert title == "Hello world!"
+    assert stored_body == body
+
+
 def test_log_creates_note_with_body_and_tags(tmp_path: Path, monkeypatch) -> None:
     config_path = _write_config(tmp_path)
     repo_dir = tmp_path / "notes-repo"
@@ -55,7 +71,8 @@ def test_log_creates_note_with_body_and_tags(tmp_path: Path, monkeypatch) -> Non
     assert result.exit_code == 0, result.output
 
     title, body = _read_single_note(repo_dir / DB_FILENAME)
-    assert title == ""
+    # Title is derived from the first line/sentence when logging directly.
+    assert title == "This is a log #til #python"
     assert body == "This is a log #til #python"
 
 
@@ -72,7 +89,7 @@ def test_log_with_message_option_handles_hashtags(tmp_path: Path, monkeypatch) -
     assert result.exit_code == 0, result.output
 
     title, body = _read_single_note(repo_dir / DB_FILENAME)
-    assert title == ""
+    assert title == msg
     assert body == msg
 
 

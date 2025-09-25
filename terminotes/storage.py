@@ -118,7 +118,28 @@ class Storage:
         )
 
     def list_notes(self, limit: int = 10) -> Iterable[Note]:
-        raise NotImplementedError("Listing notes pending implementation.")
+        """Return up to ``limit`` most recently updated notes.
+
+        Notes are ordered by ``updated_at`` descending (most recent first).
+        """
+        if limit <= 0:
+            return []
+
+        with self._connection() as conn:
+            try:
+                cursor = conn.execute(
+                    (
+                        f"SELECT {SELECT_COLUMNS} FROM {TABLE_NOTES} "
+                        "ORDER BY updated_at DESC LIMIT ?"
+                    ),
+                    (int(limit),),
+                )
+            except sqlite3.DatabaseError as exc:  # pragma: no cover - defensive
+                raise StorageError(f"Failed to list notes: {exc}") from exc
+
+            rows = cursor.fetchall()
+
+        return [self._row_to_note(r) for r in rows]
 
     def fetch_note(self, note_id: int) -> Note:
         with self._connection() as conn:
@@ -221,7 +242,39 @@ class Storage:
                 raise StorageError(f"Note '{note_id}' not found.")
 
     def search_notes(self, pattern: str) -> Iterable[Note]:
-        raise NotImplementedError("Search pending implementation.")
+        # Very simple case-insensitive substring match across title, body, description.
+        # Caller is responsible for validating non-empty pattern and limit control.
+        text = str(pattern)
+        if not text:
+            return []
+
+        # Escape LIKE wildcards and backslash, then surround with %...%
+        def _escape_like(s: str) -> str:
+            s = s.replace("\\", "\\\\")
+            s = s.replace("%", "\\%")
+            s = s.replace("_", "\\_")
+            return s
+
+        like = f"%{_escape_like(text)}%"
+
+        with self._connection() as conn:
+            try:
+                cursor = conn.execute(
+                    (
+                        f"SELECT {SELECT_COLUMNS} FROM {TABLE_NOTES} "
+                        "WHERE LOWER(title) LIKE LOWER(?) ESCAPE '\\' "
+                        "   OR LOWER(body) LIKE LOWER(?) ESCAPE '\\' "
+                        "   OR LOWER(description) LIKE LOWER(?) ESCAPE '\\' "
+                        "ORDER BY updated_at DESC"
+                    ),
+                    (like, like, like),
+                )
+            except sqlite3.DatabaseError as exc:  # pragma: no cover - defensive
+                raise StorageError(f"Failed to search notes: {exc}") from exc
+
+            rows = cursor.fetchall()
+
+        return [self._row_to_note(r) for r in rows]
 
     # ------------------------------------------------------------------
     # Internal helpers

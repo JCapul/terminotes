@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from typing import Callable
 
@@ -18,6 +19,36 @@ from ..utils.datetime_fmt import (
 WarnFunc = Callable[[str], None]
 EditFunc = Callable[[str, str | None], str]
 
+MAX_TITLE_CHARS = 80
+
+
+def _derive_title_from_body(body: str, *, max_len: int = MAX_TITLE_CHARS) -> str:
+    """Derive a title from the body text.
+
+    Preference order:
+    1) Initial sentence ending with '.', '!' or '?'
+    2) Otherwise, the first line
+
+    The result is trimmed and truncated to ``max_len`` characters,
+    appending an ellipsis when truncated.
+    """
+    text = body.strip()
+    if not text:
+        return ""
+
+    # Try to capture the first sentence ending with a sentence mark.
+    m = re.search(r"^\s*(.+?[\.\!\?])(?:\s|$)", text, flags=re.S)
+    if m:
+        candidate = m.group(1).strip()
+    else:
+        # Fallback: first line
+        candidate = text.splitlines()[0].strip()
+
+    if len(candidate) <= max_len:
+        return candidate
+    # Truncate and add ellipsis
+    return candidate[: max_len - 1].rstrip() + "\u2026"
+
 
 def create_log_entry(
     ctx: AppContext,
@@ -27,8 +58,10 @@ def create_log_entry(
 ) -> Note:
     """Create a new log-type note directly (no editor)."""
 
+    title = _derive_title_from_body(body)
+
     note = ctx.storage.create_note(
-        title="",
+        title=title,
         body=body,
         description="",
         can_publish=False,
