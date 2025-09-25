@@ -5,7 +5,6 @@ from __future__ import annotations
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Sequence
 
 DEFAULT_CONFIG_DIR = Path("~/.config/terminotes").expanduser()
 DEFAULT_CONFIG_PATH = DEFAULT_CONFIG_DIR / "config.toml"
@@ -34,7 +33,6 @@ class TerminotesConfig:
 
     git_remote_url: str
     terminotes_dir: Path
-    allowed_tags: tuple[str, ...]
     editor: str | None = None
     source_path: Path | None = None
 
@@ -89,25 +87,7 @@ def load_config(path: Path | None = None) -> TerminotesConfig:
     if not git_remote_url:
         raise InvalidConfigError("'git_remote_url' must be a non-empty string")
 
-    allowed_tags_raw: Sequence[str] | None = raw.get("allowed_tags")
-    if allowed_tags_raw is None:
-        allowed_tags: tuple[str, ...] = ()
-    else:
-        if not isinstance(allowed_tags_raw, Sequence) or isinstance(
-            allowed_tags_raw, (str, bytes)
-        ):
-            raise InvalidConfigError("'allowed_tags' must be a list of strings")
-        cleaned: list[str] = []
-        for tag in allowed_tags_raw:
-            if not isinstance(tag, str):
-                raise InvalidConfigError(
-                    "All entries in 'allowed_tags' must be strings"
-                )
-            tag_clean = tag.strip()
-            if not tag_clean:
-                raise InvalidConfigError("Tags cannot be empty strings")
-            cleaned.append(tag_clean)
-        allowed_tags = tuple(cleaned)
+    # allowed_tags is deprecated and ignored; tags are free-form now.
 
     editor = raw.get("editor")
     if editor is not None and not isinstance(editor, str):
@@ -116,7 +96,6 @@ def load_config(path: Path | None = None) -> TerminotesConfig:
     return TerminotesConfig(
         git_remote_url=git_remote_url,
         terminotes_dir=terminotes_dir,
-        allowed_tags=allowed_tags,
         editor=editor,
         source_path=config_path,
     )
@@ -135,7 +114,6 @@ def bootstrap_config_file(path: Path) -> bool:
     default_content = (
         'git_remote_url = "file:///path/to/notes.git"\n'
         'terminotes_dir = "notes-repo"\n'
-        "allowed_tags = []\n"
         'editor = "vim"\n'
     )
     path.write_text(default_content, encoding="utf-8")

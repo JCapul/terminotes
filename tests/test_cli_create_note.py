@@ -19,8 +19,7 @@ def _write_config(base_dir: Path, *, git_enabled: bool = True) -> Path:
     config_path = base_dir / "config.toml"
     repo_url_line = 'git_remote_url = "file:///tmp/terminotes-notes.git"\n'
     config_path.write_text(
-        (f'{repo_url_line}allowed_tags = ["til", "python"]\neditor = "cat"\n').strip(),
-        encoding="utf-8",
+        (f'{repo_url_line}editor = "cat"\n').strip(), encoding="utf-8"
     )
     repo_dir = base_dir / "notes-repo"
     (repo_dir / ".git").mkdir(parents=True)
@@ -301,10 +300,8 @@ def test_config_command_bootstraps_when_missing(tmp_path, monkeypatch) -> None:
 ## Git URL is now mandatory; local-only mode removed.
 
 
-def test_new_command_unknown_tags_warns_and_saves_without_tags(
-    tmp_path, monkeypatch
-) -> None:
-    # Only 'til' is allowed, editor will return an unknown tag
+def test_new_command_accepts_any_tags_without_warning(tmp_path, monkeypatch) -> None:
+    # Tag validation removed; editor returns a tag not in config and it is accepted.
     config_path = _write_config(tmp_path)
     repo_dir = tmp_path / "notes-repo"
     _set_default_paths(config_path, monkeypatch)
@@ -327,15 +324,15 @@ def test_new_command_unknown_tags_warns_and_saves_without_tags(
     result = runner.invoke(cli.cli, ["note"])
 
     assert result.exit_code == 0, result.output
-    assert "Warning:" in result.output
+    assert "Warning:" not in result.output
 
     title, body, tags = _read_single_note(repo_dir / DB_FILENAME)
     assert title == "Unknown Tags"
     assert body == "Body."
-    assert tags == ()
+    assert tags == ("not-allowed",)
 
 
-def test_new_command_mixed_tags_keeps_valid(tmp_path, monkeypatch) -> None:
+def test_new_command_keeps_all_tags(tmp_path, monkeypatch) -> None:
     config_path = _write_config(tmp_path)
     repo_dir = tmp_path / "notes-repo"
     _set_default_paths(config_path, monkeypatch)
@@ -358,17 +355,15 @@ def test_new_command_mixed_tags_keeps_valid(tmp_path, monkeypatch) -> None:
     result = runner.invoke(cli.cli, ["note"])
 
     assert result.exit_code == 0, result.output
-    assert "Warning:" in result.output
+    assert "Warning:" not in result.output
 
     title, body, tags = _read_single_note(repo_dir / DB_FILENAME)
     assert title == "Mixed Tags"
     assert body == "Body."
-    assert tags == ("til",)
+    assert tags == ("til", "nope")
 
 
-def test_edit_command_with_unknown_tags_replaces_with_empty(
-    tmp_path, monkeypatch
-) -> None:
+def test_edit_command_accepts_any_tags(tmp_path, monkeypatch) -> None:
     config_path = _write_config(tmp_path)
     repo_dir = tmp_path / "notes-repo"
     _set_default_paths(config_path, monkeypatch)
@@ -395,7 +390,7 @@ def test_edit_command_with_unknown_tags_replaces_with_empty(
     result = runner.invoke(cli.cli, ["note", "--edit", str(note.id)])
 
     assert result.exit_code == 0, result.output
-    assert "Warning:" in result.output
+    assert "Warning:" not in result.output
 
     conn = sqlite3.connect(repo_dir / DB_FILENAME)
     row = conn.execute(
@@ -405,10 +400,10 @@ def test_edit_command_with_unknown_tags_replaces_with_empty(
     conn.close()
 
     assert row is not None
-    assert tuple(json.loads(row[0])) == ()
+    assert tuple(json.loads(row[0])) == ("not-allowed",)
 
 
-def test_edit_command_with_mixed_tags_keeps_valid(tmp_path, monkeypatch) -> None:
+def test_edit_command_keeps_all_tags(tmp_path, monkeypatch) -> None:
     config_path = _write_config(tmp_path)
     repo_dir = tmp_path / "notes-repo"
     _set_default_paths(config_path, monkeypatch)
@@ -435,7 +430,7 @@ def test_edit_command_with_mixed_tags_keeps_valid(tmp_path, monkeypatch) -> None
     result = runner.invoke(cli.cli, ["note", "--edit", str(note.id)])
 
     assert result.exit_code == 0, result.output
-    assert "Warning:" in result.output
+    assert "Warning:" not in result.output
 
     conn = sqlite3.connect(repo_dir / DB_FILENAME)
     row = conn.execute(
@@ -445,7 +440,7 @@ def test_edit_command_with_mixed_tags_keeps_valid(tmp_path, monkeypatch) -> None
     conn.close()
 
     assert row is not None
-    assert tuple(json.loads(row[0])) == ("til",)
+    assert tuple(json.loads(row[0])) == ("til", "not-allowed")
 
 
 def test_info_command_displays_repo_and_config(tmp_path, monkeypatch, capsys) -> None:

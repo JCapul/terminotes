@@ -23,7 +23,6 @@ def test_terminotes_dir_defaults_to_config_dir(tmp_path: Path) -> None:
     config_path = write_config(
         tmp_path / "nested",
         """
-        allowed_tags = []
         git_remote_url = "git@example:notes.git"
         """,
     )
@@ -37,7 +36,6 @@ def test_load_config_success(tmp_path: Path) -> None:
     config_path = write_config(
         tmp_path,
         """
-        allowed_tags = ["python", "til"]
         editor = "nvim"
         git_remote_url = "git@example:notes.git"
         """,
@@ -47,7 +45,6 @@ def test_load_config_success(tmp_path: Path) -> None:
     assert isinstance(config, TerminotesConfig)
     assert config.git_remote_url == "git@example:notes.git"
     assert config.terminotes_dir.name == "notes-repo"
-    assert config.allowed_tags == ("python", "til")
     assert config.editor == "nvim"
     assert config.source_path == config_path
 
@@ -59,16 +56,8 @@ def test_load_config_missing_file(tmp_path: Path) -> None:
 
 
 def test_load_config_rejects_empty_tags(tmp_path: Path) -> None:
-    config_path = write_config(
-        tmp_path,
-        """
-        allowed_tags = ["python", "  "]
-        git_remote_url = "git@example:notes.git"
-        """,
-    )
-
-    with pytest.raises(InvalidConfigError):
-        load_config(config_path)
+    # Deprecated: allowed_tags no longer validated; this test is obsolete.
+    pass
 
 
 def test_git_remote_url_is_required(tmp_path: Path) -> None:
@@ -76,7 +65,6 @@ def test_git_remote_url_is_required(tmp_path: Path) -> None:
     config_path = write_config(
         tmp_path,
         """
-        allowed_tags = []
         """,
     )
     with pytest.raises(InvalidConfigError):
@@ -86,7 +74,6 @@ def test_git_remote_url_is_required(tmp_path: Path) -> None:
     config_path = write_config(
         tmp_path,
         """
-        allowed_tags = []
         git_remote_url = "  "
         """,
     )

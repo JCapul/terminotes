@@ -6,7 +6,7 @@ import tomllib
 from dataclasses import dataclass
 from typing import Any, Iterable
 
-FRONTMATTER_DELIM = "+ + +".replace(" ", "")
+FRONTMATTER_DELIM = "+++"
 
 
 @dataclass(slots=True)

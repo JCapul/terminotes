@@ -18,7 +18,7 @@ from .config import (
 from .editor import EditorError
 from .editor import open_editor as open_editor
 from .git_sync import GitSync, GitSyncError
-from .services.notes import create_via_editor, edit_via_editor
+from .services.notes import create_log_entry, create_via_editor, edit_via_editor
 from .storage import Storage, StorageError
 
 
@@ -85,7 +85,7 @@ def note(ctx: click.Context, edit_mode: bool, note_id: int | None) -> None:
     app: AppContext = ctx.obj["app"]
     if edit_mode:
         try:
-            updated, unknown = edit_via_editor(
+            updated = edit_via_editor(
                 app,
                 note_id,
                 edit_fn=open_editor,
@@ -94,16 +94,12 @@ def note(ctx: click.Context, edit_mode: bool, note_id: int | None) -> None:
         except (EditorError, StorageError, GitSyncError) as exc:
             raise TerminotesCliError(str(exc)) from exc
 
-        if unknown:
-            unknown_list = ", ".join(unknown)
-            click.echo(f"Warning: Unknown tag(s): {unknown_list}. Saving without them.")
-
-        click.echo(f"Updated note {updated.id}")
+        click.echo(f"Updated entry #{updated.id} (note)")
         return
 
     # Create new note
     try:
-        note_obj, unknown = create_via_editor(
+        note_obj = create_via_editor(
             app,
             edit_fn=open_editor,
             warn=lambda msg: click.echo(msg),
@@ -111,11 +107,46 @@ def note(ctx: click.Context, edit_mode: bool, note_id: int | None) -> None:
     except (EditorError, StorageError, GitSyncError) as exc:
         raise TerminotesCliError(str(exc)) from exc
 
-    if unknown:
-        unknown_list = ", ".join(unknown)
-        click.echo(f"Warning: Unknown tag(s): {unknown_list}. Saving without them.")
+    click.echo(f"Created entry #{note_obj.id} (note)")
 
-    click.echo(f"Created note {note_obj.id}")
+
+@cli.command(name="log")
+@click.option(
+    "-t",
+    "--tags",
+    "tags_opts",
+    multiple=True,
+    help="Tags to apply (repeat or comma-separated)",
+)
+@click.argument("content", nargs=-1)
+@click.pass_context
+def log(
+    ctx: click.Context, tags_opts: tuple[str, ...], content: tuple[str, ...]
+) -> None:
+    """Create a new log entry from CLI content.
+
+    Usage: tn log -t til -t python -- This is a log entry
+    """
+
+    app: AppContext = ctx.obj["app"]
+
+    # Join all remaining args as the body (after --)
+    body = " ".join(content).strip()
+    if not body:
+        raise TerminotesCliError("Body is required for 'tn log'.")
+
+    # Parse tags: support repeated flags and comma-separated values
+    parsed_tags: list[str] = []
+    for raw in tags_opts:
+        parts = [p.strip() for p in raw.split(",")]
+        parsed_tags.extend([p for p in parts if p])
+
+    try:
+        note = create_log_entry(app, body, parsed_tags)
+    except (StorageError, GitSyncError) as exc:  # pragma: no cover - pass-through
+        raise TerminotesCliError(str(exc)) from exc
+
+    click.echo(f"Created entry #{note.id} (log)")
 
 
 @cli.command()
@@ -303,11 +334,9 @@ def _format_config(config: TerminotesConfig) -> str:
             return '""'
         return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
-    allowed = ", ".join('"' + t.replace('"', '\\"') + '"' for t in config.allowed_tags)
     lines = [
         f"git_remote_url = {quote(config.git_remote_url)}",
         f"terminotes_dir = {quote(str(config.terminotes_dir))}",
-        f"allowed_tags = [{allowed}]",
         f"editor = {quote(config.editor)}",
     ]
     return "\n".join(lines)

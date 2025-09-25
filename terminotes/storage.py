@@ -12,7 +12,7 @@ from typing import Iterable, Iterator, Sequence
 
 DB_FILENAME = "terminotes.sqlite3"
 SELECT_COLUMNS = (
-    "id, title, body, description, tags, created_at, updated_at, published, type"
+    "id, title, body, description, tags, created_at, updated_at, can_publish, type"
 )
 TABLE_NOTES = "notes"
 
@@ -28,7 +28,7 @@ class Note:
     tags: tuple[str, ...]
     created_at: datetime
     updated_at: datetime
-    published: bool
+    can_publish: bool
     type: str
 
 
@@ -64,7 +64,7 @@ class Storage:
                     tags TEXT NOT NULL,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
-                    published INTEGER NOT NULL DEFAULT 0,
+                    can_publish INTEGER NOT NULL DEFAULT 0,
                     type TEXT NOT NULL DEFAULT 'note'
                 )
                 """
@@ -83,7 +83,7 @@ class Storage:
         *,
         created_at: datetime | None = None,
         updated_at: datetime | None = None,
-        published: bool = False,
+        can_publish: bool = False,
         note_type: str = "note",
     ) -> Note:
         """Persist a new note and return the resulting ``Note`` instance."""
@@ -103,7 +103,7 @@ class Storage:
                 cursor = conn.execute(
                     (
                         "INSERT INTO notes (title, body, description, tags, "
-                        "created_at, updated_at, published, type) "
+                        "created_at, updated_at, can_publish, type) "
                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
                     ),
                     (
@@ -113,7 +113,7 @@ class Storage:
                         encoded_tags,
                         created.isoformat(),
                         updated.isoformat(),
-                        1 if published else 0,
+                        1 if can_publish else 0,
                         note_type,
                     ),
                 )
@@ -128,7 +128,7 @@ class Storage:
             tags=normalized_tags,
             created_at=created,
             updated_at=updated,
-            published=published,
+            can_publish=can_publish,
             type=note_type,
         )
 
@@ -156,7 +156,7 @@ class Storage:
         *,
         created_at: datetime | None = None,
         updated_at: datetime | None = None,
-        published: bool | None = None,
+        can_publish: bool | None = None,
         note_type: str | None = None,
     ) -> Note:
         title = title.strip()
@@ -173,7 +173,7 @@ class Storage:
                 """
                 UPDATE notes
                 SET title = ?, body = ?, description = ?, tags = ?, updated_at = ?,
-                    published = COALESCE(?, published),
+                    can_publish = COALESCE(?, can_publish),
                     type = COALESCE(?, type)
                 WHERE id = ?
                 """,
@@ -183,7 +183,7 @@ class Storage:
                     description,
                     encoded_tags,
                     new_updated.isoformat(),
-                    (None if published is None else (1 if published else 0)),
+                    (None if can_publish is None else (1 if can_publish else 0)),
                     note_type,
                     int(note_id),
                 ),
@@ -248,18 +248,38 @@ class Storage:
     # Integer primary keys are assigned by SQLite; no manual generation.
 
     def _ensure_columns(self, conn: sqlite3.Connection) -> None:
-        # Add missing 'published' column for older databases.
+        """Ensure expected columns exist and migrate legacy fields.
+
+        - Adds missing 'can_publish' column (renamed from legacy 'published').
+        - Copies legacy values from 'published' into 'can_publish' when upgrading.
+        - Ensures 'type' column exists.
+        """
         try:
             cur = conn.execute("PRAGMA table_info(notes)")
             cols = {str(r[1]) for r in cur.fetchall()}
-            if "published" not in cols:
+
+            added_can_publish = False
+            if "can_publish" not in cols:
                 conn.execute(
-                    "ALTER TABLE notes ADD COLUMN published INTEGER NOT NULL DEFAULT 0"
+                    (
+                        "ALTER TABLE notes ADD COLUMN can_publish "
+                        "INTEGER NOT NULL DEFAULT 0"
+                    )
                 )
+                added_can_publish = True
+
             if "type" not in cols:
                 conn.execute(
                     "ALTER TABLE notes ADD COLUMN type TEXT NOT NULL DEFAULT 'note'"
                 )
+
+            # If upgrading from legacy schema where 'published' existed, migrate values.
+            if added_can_publish and "published" in cols:
+                try:
+                    conn.execute("UPDATE notes SET can_publish = published")
+                except sqlite3.DatabaseError:
+                    # Best-effort migration; ignore if legacy column missing.
+                    pass
         except sqlite3.DatabaseError as exc:  # pragma: no cover - defensive
             raise StorageError(f"Failed to ensure schema columns: {exc}") from exc
 
@@ -272,7 +292,7 @@ class Storage:
             tags_raw,
             created_at_raw,
             updated_at_raw,
-            published_raw,
+            can_publish_raw,
             type_raw,
         ) = row
         try:
@@ -288,6 +308,6 @@ class Storage:
             tags=tags,
             created_at=datetime.fromisoformat(created_at_raw),
             updated_at=datetime.fromisoformat(updated_at_raw),
-            published=bool(int(published_raw)),
+            can_publish=bool(int(can_publish_raw)),
             type=str(type_raw),
         )

@@ -3,5 +3,4 @@
 
 git_remote_url = "git@github.com:example/terminotes-notes.git"
 terminotes_dir = "notes-repo"
-allowed_tags = ["til", "python", "cli"]
 editor = "vim"
