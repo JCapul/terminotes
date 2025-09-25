@@ -62,6 +62,25 @@ def test_log_creates_note_with_body_and_tags(tmp_path: Path, monkeypatch) -> Non
     assert note_type == "log"
 
 
+def test_log_with_message_option_handles_hashtags(tmp_path: Path, monkeypatch) -> None:
+    config_path = _write_config(tmp_path)
+    repo_dir = tmp_path / "notes-repo"
+    _set_default_paths(config_path, monkeypatch)
+    monkeypatch.setattr(GitSync, "ensure_local_clone", lambda self: None)
+
+    runner = CliRunner()
+    msg = "Crazy stuff happening in #python"
+    result = runner.invoke(cli.cli, ["log", "--message", msg])
+
+    assert result.exit_code == 0, result.output
+
+    title, body, tags, note_type = _read_single_note(repo_dir / DB_FILENAME)
+    assert title == ""
+    assert body == msg
+    assert tags == ("python",)
+    assert note_type == "log"
+
+
 def test_log_requires_body(tmp_path: Path, monkeypatch) -> None:
     config_path = _write_config(tmp_path)
     _set_default_paths(config_path, monkeypatch)

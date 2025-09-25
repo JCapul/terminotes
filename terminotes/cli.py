@@ -122,9 +122,17 @@ def edit(ctx: click.Context, note_id: int | None, edit_last: bool) -> None:
 
 
 @cli.command(name="log")
+@click.option(
+    "-m",
+    "--message",
+    "message_opt",
+    type=str,
+    default=None,
+    help=("Log message text. Prefer this when using hashtags to avoid shell comments."),
+)
 @click.argument("content", nargs=-1)
 @click.pass_context
-def log(ctx: click.Context, content: tuple[str, ...]) -> None:
+def log(ctx: click.Context, message_opt: str | None, content: tuple[str, ...]) -> None:
     """Create a new log entry from CLI content.
 
     Usage: tn log -- This is a log entry
@@ -132,8 +140,12 @@ def log(ctx: click.Context, content: tuple[str, ...]) -> None:
 
     app: AppContext = ctx.obj["app"]
 
-    # Join all remaining args as the body (after --)
-    body = " ".join(content).strip()
+    # Prefer explicit --message to avoid shell treating '#' as comments.
+    if message_opt is not None and content:
+        raise TerminotesCliError(
+            "Use either --message or positional content, not both."
+        )
+    body = (message_opt if message_opt is not None else " ".join(content)).strip()
     if not body:
         raise TerminotesCliError("Body is required for 'tn log'.")
 
