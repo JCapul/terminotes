@@ -127,7 +127,7 @@ def edit(ctx: click.Context, note_id: int | None, edit_last: bool) -> None:
 def log(ctx: click.Context, content: tuple[str, ...]) -> None:
     """Create a new log entry from CLI content.
 
-    Usage: tn log -t til -t python -- This is a log entry
+    Usage: tn log -- This is a log entry
     """
 
     app: AppContext = ctx.obj["app"]
@@ -143,6 +143,27 @@ def log(ctx: click.Context, content: tuple[str, ...]) -> None:
         raise TerminotesCliError(str(exc)) from exc
 
     click.echo(f"Created note {note.id}")
+
+
+@cli.command(name="delete")
+@click.argument("note_id", type=int)
+@click.pass_context
+def delete(ctx: click.Context, note_id: int) -> None:
+    """Delete a note identified by NOTE_ID from the database."""
+
+    app: AppContext = ctx.obj["app"]
+    storage: Storage = app.storage
+
+    try:
+        storage.delete_note(note_id)
+        # Commit the DB update locally (no network interaction).
+        app.git_sync.commit_db_update(storage.path, f"chore(db): delete note {note_id}")
+    except StorageError as exc:
+        raise TerminotesCliError(str(exc)) from exc
+    except GitSyncError as exc:  # pragma: no cover - pass-through
+        raise TerminotesCliError(str(exc)) from exc
+
+    click.echo(f"Deleted note {note_id}")
 
 
 @cli.command()

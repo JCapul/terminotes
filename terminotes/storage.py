@@ -228,6 +228,19 @@ class Storage:
             (count,) = cursor.fetchone()
         return int(count)
 
+    def delete_note(self, note_id: int) -> None:
+        """Delete a note by its id.
+
+        Raises ``StorageError`` if the note does not exist.
+        """
+        with self._connection() as conn:
+            cursor = conn.execute(
+                "DELETE FROM notes WHERE id = ?",
+                (int(note_id),),
+            )
+            if cursor.rowcount == 0:
+                raise StorageError(f"Note '{note_id}' not found.")
+
     def search_notes(self, pattern: str) -> Iterable[Note]:
         raise NotImplementedError("Search pending implementation.")
 
