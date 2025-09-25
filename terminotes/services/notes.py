@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Callable, Iterable
+from typing import Callable
 
 from ..app import AppContext
 from ..editor import open_editor as default_open_editor
@@ -159,11 +159,6 @@ def update_via_editor(
     return updated
 
 
-def _normalize_tags(tags: Iterable[str]) -> tuple[str, ...]:
-    # Deprecated helper retained for safety; prefer extract_hashtags(body).
-    return tuple(str(t).strip() for t in tags if str(t).strip())
-
-
 def _parse_optional_dt(
     value: object, *, field: str, warn: WarnFunc | None
 ) -> datetime | None:
@@ -191,6 +186,3 @@ def _extract_can_publish(metadata: dict[str, object], default: bool) -> bool:
         if val in {"false", "0", "no", "off"}:
             return False
     return default
-
-
-# 'type' metadata removed; no extraction required.

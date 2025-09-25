@@ -253,67 +253,8 @@ class Storage:
     # Integer primary keys are assigned by SQLite; no manual generation.
 
     def _ensure_columns(self, conn: sqlite3.Connection) -> None:
-        """Ensure expected columns exist and migrate legacy fields.
-
-        - Adds missing 'can_publish' column (renamed from legacy 'published').
-        - Copies legacy values from 'published' into 'can_publish' when upgrading.
-        - Drops legacy 'type' column by migrating table when present.
-        """
-        try:
-            cur = conn.execute("PRAGMA table_info(notes)")
-            cols = {str(r[1]) for r in cur.fetchall()}
-
-            added_can_publish = False
-            if "can_publish" not in cols:
-                conn.execute(
-                    (
-                        "ALTER TABLE notes ADD COLUMN can_publish "
-                        "INTEGER NOT NULL DEFAULT 0"
-                    )
-                )
-                added_can_publish = True
-
-            # If upgrading from legacy schema where 'published' existed, migrate values.
-            if added_can_publish and "published" in cols:
-                try:
-                    conn.execute("UPDATE notes SET can_publish = published")
-                except sqlite3.DatabaseError:
-                    # Best-effort migration; ignore if legacy column missing.
-                    pass
-
-            # If legacy 'type' column exists, migrate to a table without it.
-            if "type" in cols:
-                # Create new table without 'type'.
-                conn.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS notes__migrate (
-                        id INTEGER PRIMARY KEY,
-                        title TEXT NOT NULL,
-                        body TEXT NOT NULL,
-                        description TEXT NOT NULL,
-                        tags TEXT NOT NULL,
-                        created_at TEXT NOT NULL,
-                        updated_at TEXT NOT NULL,
-                        can_publish INTEGER NOT NULL DEFAULT 0
-                    )
-                    """
-                )
-                # Copy data across, ignoring 'type'.
-                conn.execute(
-                    (
-                        "INSERT INTO notes__migrate ("
-                        "id, title, body, description, tags, "
-                        "created_at, updated_at, can_publish"
-                        ") "
-                        "SELECT id, title, body, description, tags, "
-                        "created_at, updated_at, COALESCE(can_publish, 0) "
-                        "FROM notes"
-                    )
-                )
-                conn.execute("DROP TABLE notes")
-                conn.execute("ALTER TABLE notes__migrate RENAME TO notes")
-        except sqlite3.DatabaseError as exc:  # pragma: no cover - defensive
-            raise StorageError(f"Failed to ensure schema columns: {exc}") from exc
+        """Reserved for future schema migrations (no-op for now)."""
+        return
 
     def _row_to_note(self, row: sqlite3.Row | Sequence[str]) -> Note:
         (
