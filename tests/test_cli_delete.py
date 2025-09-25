@@ -42,7 +42,7 @@ def test_delete_removes_note(tmp_path: Path, monkeypatch) -> None:
     note = storage.create_note("Title", "Body", ["tag"])
 
     runner = CliRunner()
-    result = runner.invoke(cli.cli, ["delete", str(note.id)])
+    result = runner.invoke(cli.cli, ["delete", "--yes", str(note.id)])
     assert result.exit_code == 0, result.output
     assert f"Deleted note {note.id}" in result.output
 
@@ -62,6 +62,29 @@ def test_delete_nonexistent_fails(tmp_path: Path, monkeypatch) -> None:
     storage.initialize()
 
     runner = CliRunner()
-    result = runner.invoke(cli.cli, ["delete", "9999"])
+    result = runner.invoke(cli.cli, ["delete", "--yes", "9999"])
     assert result.exit_code != 0
     assert "not found" in result.output.lower()
+
+
+def test_delete_without_yes_prompts_and_can_abort(tmp_path: Path, monkeypatch) -> None:
+    config_path = _write_config(tmp_path)
+    repo_dir = tmp_path / "notes-repo"
+    _set_default_paths(config_path, monkeypatch)
+    monkeypatch.setattr(GitSync, "ensure_local_clone", lambda self: None)
+
+    storage = Storage(repo_dir / DB_FILENAME)
+    storage.initialize()
+    note = storage.create_note("Title", "Body", ["tag"])
+
+    runner = CliRunner()
+    # Simulate user declining deletion
+    result = runner.invoke(cli.cli, ["delete", str(note.id)], input="n\n")
+    assert result.exit_code != 0
+    assert "aborted" in result.output.lower()
+
+    # Ensure the note still exists
+    conn = sqlite3.connect(repo_dir / DB_FILENAME)
+    row = conn.execute("SELECT COUNT(*) FROM notes").fetchone()
+    conn.close()
+    assert row is not None and int(row[0]) == 1

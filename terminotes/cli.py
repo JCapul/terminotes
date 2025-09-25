@@ -146,13 +146,27 @@ def log(ctx: click.Context, content: tuple[str, ...]) -> None:
 
 
 @cli.command(name="delete")
+@click.option(
+    "-y",
+    "--yes",
+    "assume_yes",
+    is_flag=True,
+    help="Skip confirmation prompt",
+)
 @click.argument("note_id", type=int)
 @click.pass_context
-def delete(ctx: click.Context, note_id: int) -> None:
+def delete(ctx: click.Context, note_id: int, assume_yes: bool) -> None:
     """Delete a note identified by NOTE_ID from the database."""
 
     app: AppContext = ctx.obj["app"]
     storage: Storage = app.storage
+
+    if not assume_yes:
+        confirm = click.confirm(
+            f"Delete note {note_id}?", default=False, show_default=True
+        )
+        if not confirm:
+            raise TerminotesCliError("Deletion aborted.")
 
     try:
         storage.delete_note(note_id)
