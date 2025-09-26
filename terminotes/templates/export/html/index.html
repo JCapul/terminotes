@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{site_title}}</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <h1>{{site_title}}</h1>
+      <p class="site-tagline">{{notes_count}} notes exported from Terminotes.</p>
+      <input
+        class="search-input"
+        type="search"
+        id="search-input"
+        placeholder="Search notes..."
+        autocomplete="off"
+      />
+    </header>
+    <main>
+      <section>
+        <ul id="notes-list" class="notes-list">
+          {{notes_list}}
+        </ul>
+      </section>
+    </main>
+    <footer class="site-footer">
+      <p>Generated on {{generated_at}}.</p>
+    </footer>
+    <script src="search.js" type="module"></script>
+  </body>
+</html>

@@ -9,6 +9,7 @@ import click
 
 from .app import AppContext, bootstrap
 from .config import (
+    DEFAULT_CONFIG_DIR,
     DEFAULT_CONFIG_PATH,
     ConfigError,
     MissingConfigError,
@@ -16,7 +17,9 @@ from .config import (
     bootstrap_config_file,
 )
 from .editor import EditorError, open_editor
+from .exporters import ExportError
 from .git_sync import GitSync, GitSyncError
+from .services.export import export_notes as run_export
 from .services.notes import create_log_entry, create_via_editor, update_via_editor
 from .storage import Storage, StorageError
 from .utils.datetime_fmt import to_user_friendly_utc
@@ -382,6 +385,54 @@ def search(
         tag_list = sorted(tag.name for tag in n.tags)
         tag_suffix = f"  [tags: {', '.join(tag_list)}]" if tag_list else ""
         click.echo(f"{n.id:>4}  {updated}  {title}{tag_suffix}")
+
+
+@cli.command()
+@click.option(
+    "--to",
+    "target",
+    type=click.Choice(["html", "markdown"], case_sensitive=False),
+    required=True,
+    help="Export format",
+)
+@click.option(
+    "--dest",
+    "destination",
+    type=click.Path(path_type=Path, file_okay=False),
+    required=True,
+    help="Destination directory for the export",
+)
+@click.option(
+    "--site-title",
+    default="Terminotes",
+    show_default=True,
+    help="Site title for HTML exports",
+)
+@click.pass_context
+def export(ctx: click.Context, target: str, destination: Path, site_title: str) -> None:
+    """Export notes as HTML or Markdown."""
+
+    app: AppContext = ctx.obj["app"]
+
+    if destination.exists() and destination.is_file():
+        raise TerminotesCliError("Destination must be a directory path.")
+
+    templates_root = (
+        app.config.source_path.parent if app.config.source_path else DEFAULT_CONFIG_DIR
+    )
+
+    try:
+        count = run_export(
+            app.storage,
+            target=target,
+            destination=destination,
+            site_title=site_title,
+            templates_root=templates_root,
+        )
+    except ExportError as exc:
+        raise TerminotesCliError(str(exc)) from exc
+
+    click.echo(f"Exported {count} notes to {destination}")
 
 
 @cli.command()

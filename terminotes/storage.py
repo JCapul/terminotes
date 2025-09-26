@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
@@ -270,6 +271,28 @@ class Storage:
             if deleted == 0:
                 raise StorageError(f"Note '{note_id}' not found.")
 
+    def snapshot_notes(self) -> list["NoteSnapshot"]:
+        """Return all notes with tags for export scenarios."""
+
+        snapshots: list[NoteSnapshot] = []
+        with self._connection():
+            query = Note.select().order_by(Note.updated_at.desc())
+            for note in query:
+                tag_names = sorted({tag.name for tag in note.tags})
+                snapshots.append(
+                    NoteSnapshot(
+                        id=note.id,
+                        title=note.title,
+                        body=note.body,
+                        description=note.description,
+                        created_at=note.created_at,
+                        updated_at=note.updated_at,
+                        can_publish=bool(note.can_publish),
+                        tags=tag_names,
+                    )
+                )
+        return snapshots
+
     def search_notes(
         self,
         pattern: str,
@@ -310,3 +333,17 @@ class Storage:
             .where(Tag.name.in_(tag_names))
             .distinct()
         )
+
+
+@dataclass(slots=True)
+class NoteSnapshot:
+    """Detached representation of a note with tags for export flows."""
+
+    id: int
+    title: str
+    body: str
+    description: str
+    created_at: datetime
+    updated_at: datetime
+    can_publish: bool
+    tags: list[str]
