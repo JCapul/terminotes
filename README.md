@@ -20,25 +20,13 @@ It focuses on fast capture from the shell, durable storage in SQLite, and simple
 
 ## Installation
 
-Clone the repository and set up the environment with uv:
+Install Terminotes globally via uv:
 
 ```bash
-uv sync
+uv tool install terminotes
 ```
 
-Install pre-commit hooks (optional but recommended):
-
-```bash
-uv run pre-commit install
-```
-
-You can run Terminotes either via the console script or the module:
-
-```bash
-uv run tn --help
-# or
-uv run python -m terminotes --help
-```
+This places the `tn` console script on your `PATH`, so you can invoke Terminotes from any shell without activating a virtual environment. Use `uv tool run tn --help` (or `tn --help` once your shell picks up the shims) to explore the CLI. If you prefer a local development checkout, follow the contributing instructions later in this document.
 
 ## Quick Start
 
