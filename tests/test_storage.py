@@ -1,8 +1,6 @@
-"""Tests for the SQLite storage layer."""
+"""Tests for the Peewee-backed storage layer."""
 
 from __future__ import annotations
-
-import sqlite3
 
 from terminotes.storage import DB_FILENAME, Storage, StorageError
 
@@ -16,17 +14,12 @@ def test_create_note_persists_content(tmp_path) -> None:
 
     assert isinstance(note.id, int) and note.id >= 1
 
-    conn = sqlite3.connect(db_path)
-    row = conn.execute(
-        "SELECT id, title, body, description, created_at, updated_at FROM notes"
-    ).fetchone()
-    conn.close()
-
-    assert row is not None
-    assert row[0] == note.id
-    assert row[1] == "Captured message"
-    assert row[2] == ""
-    assert row[4] == row[5]
+    stored = storage.fetch_note(note.id)
+    assert stored.id == note.id
+    assert stored.title == "Captured message"
+    assert stored.body == ""
+    assert stored.description == ""
+    assert stored.created_at == stored.updated_at
 
 
 def test_create_note_rejects_empty_content(tmp_path) -> None:

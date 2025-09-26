@@ -15,6 +15,7 @@ license = "MIT"
 license-files = ["LICEN[CS]E*"]
 dependencies = [
     "click>=8.1.7",
+    "peewee>=3.18.2",
 ]
 
 [project.urls]

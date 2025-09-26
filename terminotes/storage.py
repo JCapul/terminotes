@@ -1,72 +1,110 @@
-"""SQLite-backed persistence layer for Terminotes."""
+"""Peewee-backed persistence layer for Terminotes."""
 
 from __future__ import annotations
 
-import sqlite3
 from contextlib import contextmanager
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable, Iterator, Sequence
+from typing import Iterator
+
+from peewee import (
+    AutoField,
+    BooleanField,
+    DoesNotExist,
+    Model,
+    SqliteDatabase,
+    TextField,
+    fn,
+)
 
 DB_FILENAME = "terminotes.sqlite3"
-SELECT_COLUMNS = "id, title, body, description, created_at, updated_at, can_publish"
 TABLE_NOTES = "notes"
 
 
-@dataclass(slots=True)
-class Note:
-    """Representation of a stored note."""
+def _utc_now() -> datetime:
+    return datetime.now(tz=timezone.utc)
 
-    id: int
-    title: str
-    body: str
-    description: str
-    created_at: datetime
-    updated_at: datetime
-    can_publish: bool
+
+def _coerce_utc(dt: datetime | None) -> datetime:
+    if dt is None:
+        return _utc_now()
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
 
 
 class StorageError(RuntimeError):
-    """Raised when interacting with the SQLite database fails."""
+    """Raised when interacting with the notes database fails."""
+
+
+class UTCTextDateField(TextField):
+    """Store ISO-8601 timestamps while returning timezone-aware datetimes."""
+
+    def python_value(self, value: str | None) -> datetime | None:  # type: ignore[override]
+        if value is None:
+            return None
+        dt = datetime.fromisoformat(value)
+        return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+
+    def db_value(self, value: datetime | None) -> str | None:  # type: ignore[override]
+        if value is None:
+            return None
+        coerced = _coerce_utc(value)
+        return coerced.isoformat()
+
+
+class StorageDatabase(SqliteDatabase):
+    """SqliteDatabase configured for per-call connection lifetimes."""
+
+    def __init__(self, path: Path) -> None:
+        super().__init__(
+            str(path),
+            pragmas={"foreign_keys": 1},
+            check_same_thread=False,
+        )
+
+
+class StorageModel(Model):
+    """Base model bound to the storage database."""
+
+    class Meta:
+        database = SqliteDatabase(None)
+
+
+class Note(StorageModel):
+    """Peewee model representing a stored note."""
+
+    id = AutoField()
+    title = TextField(null=False)
+    body = TextField(null=False)
+    description = TextField(default="", null=False)
+    created_at = UTCTextDateField(default=_utc_now, null=False)
+    updated_at = UTCTextDateField(default=_utc_now, null=False)
+    can_publish = BooleanField(default=False, null=False)
+
+    class Meta:
+        table_name = TABLE_NOTES
 
 
 class Storage:
-    """Abstraction over the Terminotes SQLite database."""
+    """High-level helper for interacting with the Terminotes database."""
 
     def __init__(self, path: Path | str) -> None:
         self.path = Path(path)
+        self._database = StorageDatabase(self.path)
 
-    # ------------------------------------------------------------------
-    # Lifecycle helpers
-    # ------------------------------------------------------------------
     def initialize(self) -> None:
-        """Ensure the notes database exists with the expected schema."""
-
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
-        except OSError as exc:  # pragma: no cover - filesystem errors are rare
+        except OSError as exc:  # pragma: no cover - filesystem failures are rare
             raise StorageError(f"Failed to create database directory: {exc}") from exc
 
-        with self._connection() as conn:
-            conn.execute(
-                """
-                CREATE TABLE IF NOT EXISTS notes (
-                    id INTEGER PRIMARY KEY,
-                    title TEXT NOT NULL,
-                    body TEXT NOT NULL,
-                    description TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    can_publish INTEGER NOT NULL DEFAULT 0
-                )
-                """
-            )
-            self._ensure_columns(conn)
+        with self._binding() as note_model:
+            try:
+                note_model.create_table(safe=True)
+            except Exception as exc:  # pragma: no cover - defensive
+                raise StorageError(f"Failed to initialize database: {exc}") from exc
 
-    # ------------------------------------------------------------------
-    # Note operations
-    # ------------------------------------------------------------------
     def create_note(
         self,
         title: str,
@@ -77,80 +115,47 @@ class Storage:
         updated_at: datetime | None = None,
         can_publish: bool = False,
     ) -> Note:
-        """Persist a new note and return the resulting ``Note`` instance."""
-
-        title = title.strip()
-        body = body.rstrip()
-        if not (title or body):
+        normalized_title = title.strip()
+        normalized_body = body.rstrip()
+        if not (normalized_title or normalized_body):
             raise StorageError("Cannot create an empty note.")
 
-        created = created_at or datetime.now(tz=timezone.utc)
-        updated = updated_at or created
+        created = _coerce_utc(created_at)
+        updated = _coerce_utc(updated_at) if updated_at is not None else created
 
-        with self._connection() as conn:
+        with self._binding() as note_model:
             try:
-                cursor = conn.execute(
-                    (
-                        "INSERT INTO notes (title, body, description, "
-                        "created_at, updated_at, can_publish) "
-                        "VALUES (?, ?, ?, ?, ?, ?)"
-                    ),
-                    (
-                        title,
-                        body,
-                        description,
-                        created.isoformat(),
-                        updated.isoformat(),
-                        1 if can_publish else 0,
-                    ),
+                note = note_model.create(
+                    title=normalized_title,
+                    body=normalized_body,
+                    description=description,
+                    created_at=created,
+                    updated_at=updated,
+                    can_publish=can_publish,
                 )
-            except sqlite3.DatabaseError as exc:  # pragma: no cover - defensive
+            except Exception as exc:  # pragma: no cover - defensive
                 raise StorageError(f"Failed to insert note: {exc}") from exc
 
-        return Note(
-            id=int(cursor.lastrowid),
-            title=title,
-            body=body,
-            description=description,
-            created_at=created,
-            updated_at=updated,
-            can_publish=can_publish,
-        )
+        return note
 
-    def list_notes(self, limit: int = 10) -> Iterable[Note]:
-        """Return up to ``limit`` most recently updated notes.
-
-        Notes are ordered by ``updated_at`` descending (most recent first).
-        """
+    def list_notes(self, limit: int = 10) -> list[Note]:
         if limit <= 0:
             return []
 
-        with self._connection() as conn:
-            try:
-                cursor = conn.execute(
-                    (
-                        f"SELECT {SELECT_COLUMNS} FROM {TABLE_NOTES} "
-                        "ORDER BY updated_at DESC LIMIT ?"
-                    ),
-                    (int(limit),),
-                )
-            except sqlite3.DatabaseError as exc:  # pragma: no cover - defensive
-                raise StorageError(f"Failed to list notes: {exc}") from exc
-
-            rows = cursor.fetchall()
-
-        return [self._row_to_note(r) for r in rows]
+        with self._binding() as note_model:
+            query = (
+                note_model.select()
+                .order_by(note_model.updated_at.desc())
+                .limit(int(limit))
+            )
+            return list(query)
 
     def fetch_note(self, note_id: int) -> Note:
-        with self._connection() as conn:
-            cursor = conn.execute(
-                (f"SELECT {SELECT_COLUMNS} FROM {TABLE_NOTES} WHERE id = ?"),
-                (int(note_id),),
-            )
-            row = cursor.fetchone()
-        if row is None:
-            raise StorageError(f"Note '{note_id}' not found.")
-        return self._row_to_note(row)
+        with self._binding() as note_model:
+            try:
+                return note_model.get_by_id(int(note_id))
+            except DoesNotExist:
+                raise StorageError(f"Note '{note_id}' not found.") from None
 
     def update_note(
         self,
@@ -163,156 +168,74 @@ class Storage:
         updated_at: datetime | None = None,
         can_publish: bool | None = None,
     ) -> Note:
-        title = title.strip()
-        body = body.rstrip()
-        if not (title or body):
+        normalized_title = title.strip()
+        normalized_body = body.rstrip()
+        if not (normalized_title or normalized_body):
             raise StorageError("Cannot update note with empty content.")
 
-        # Determine new timestamps
-        new_updated = updated_at or datetime.now(tz=timezone.utc)
+        new_updated = _coerce_utc(updated_at)
+        new_created = _coerce_utc(created_at) if created_at is not None else None
 
-        with self._connection() as conn:
-            cursor = conn.execute(
-                """
-                UPDATE notes
-                SET title = ?, body = ?, description = ?, updated_at = ?,
-                    can_publish = COALESCE(?, can_publish)
-                WHERE id = ?
-                """,
-                (
-                    title,
-                    body,
-                    description,
-                    new_updated.isoformat(),
-                    (None if can_publish is None else (1 if can_publish else 0)),
-                    int(note_id),
-                ),
-            )
-            if cursor.rowcount == 0:
-                raise StorageError(f"Note '{note_id}' not found.")
+        with self._binding() as note_model:
+            try:
+                note = note_model.get_by_id(int(note_id))
+            except DoesNotExist:
+                raise StorageError(f"Note '{note_id}' not found.") from None
 
-            # Update created_at if explicitly provided
-            if created_at is not None:
-                conn.execute(
-                    "UPDATE notes SET created_at = ? WHERE id = ?",
-                    (created_at.isoformat(), int(note_id)),
-                )
+            note.title = normalized_title
+            note.body = normalized_body
+            note.description = description
+            note.updated_at = new_updated
+            if new_created is not None:
+                note.created_at = new_created
+            if can_publish is not None:
+                note.can_publish = can_publish
 
-            cursor = conn.execute(
-                (f"SELECT {SELECT_COLUMNS} FROM {TABLE_NOTES} WHERE id = ?"),
-                (int(note_id),),
-            )
-            row = cursor.fetchone()
-
-        if row is None:  # pragma: no cover - defensive
-            raise StorageError(f"Note '{note_id}' not found after update.")
-
-        return self._row_to_note(row)
+            note.save()
+            return note
 
     def fetch_last_updated_note(self) -> Note:
-        with self._connection() as conn:
-            cursor = conn.execute(
-                f"SELECT {SELECT_COLUMNS} FROM {TABLE_NOTES} "
-                "ORDER BY updated_at DESC LIMIT 1"
+        with self._binding() as note_model:
+            note = (
+                note_model.select()
+                .order_by(note_model.updated_at.desc())
+                .limit(1)
+                .first()
             )
-            row = cursor.fetchone()
-
-        if row is None:
-            raise StorageError("No notes available.")
-
-        return self._row_to_note(row)
+            if note is None:
+                raise StorageError("No notes available.")
+            return note
 
     def count_notes(self) -> int:
-        with self._connection() as conn:
-            cursor = conn.execute("SELECT COUNT(*) FROM notes")
-            (count,) = cursor.fetchone()
-        return int(count)
+        with self._binding() as note_model:
+            return note_model.select().count()
 
     def delete_note(self, note_id: int) -> None:
-        """Delete a note by its id.
-
-        Raises ``StorageError`` if the note does not exist.
-        """
-        with self._connection() as conn:
-            cursor = conn.execute(
-                "DELETE FROM notes WHERE id = ?",
-                (int(note_id),),
-            )
-            if cursor.rowcount == 0:
+        with self._binding() as note_model:
+            deleted = note_model.delete().where(note_model.id == int(note_id)).execute()
+            if deleted == 0:
                 raise StorageError(f"Note '{note_id}' not found.")
 
-    def search_notes(self, pattern: str) -> Iterable[Note]:
-        # Very simple case-insensitive substring match across title, body, description.
-        # Caller is responsible for validating non-empty pattern and limit control.
+    def search_notes(self, pattern: str) -> list[Note]:
         text = str(pattern)
         if not text:
             return []
 
-        # Escape LIKE wildcards and backslash, then surround with %...%
-        def _escape_like(s: str) -> str:
-            s = s.replace("\\", "\\\\")
-            s = s.replace("%", "\\%")
-            s = s.replace("_", "\\_")
-            return s
-
-        like = f"%{_escape_like(text)}%"
-
-        with self._connection() as conn:
-            try:
-                cursor = conn.execute(
-                    (
-                        f"SELECT {SELECT_COLUMNS} FROM {TABLE_NOTES} "
-                        "WHERE LOWER(title) LIKE LOWER(?) ESCAPE '\\' "
-                        "   OR LOWER(body) LIKE LOWER(?) ESCAPE '\\' "
-                        "   OR LOWER(description) LIKE LOWER(?) ESCAPE '\\' "
-                        "ORDER BY updated_at DESC"
-                    ),
-                    (like, like, like),
+        with self._binding() as note_model:
+            lowered = text.lower()
+            query = (
+                note_model.select()
+                .where(
+                    (fn.LOWER(note_model.title).contains(lowered))
+                    | (fn.LOWER(note_model.body).contains(lowered))
+                    | (fn.LOWER(note_model.description).contains(lowered))
                 )
-            except sqlite3.DatabaseError as exc:  # pragma: no cover - defensive
-                raise StorageError(f"Failed to search notes: {exc}") from exc
+                .order_by(note_model.updated_at.desc())
+            )
+            return list(query)
 
-            rows = cursor.fetchall()
-
-        return [self._row_to_note(r) for r in rows]
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
     @contextmanager
-    def _connection(self) -> Iterator[sqlite3.Connection]:
-        conn = sqlite3.connect(self.path)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON")
-        try:
-            yield conn
-            conn.commit()
-        finally:
-            conn.close()
-
-    # Integer primary keys are assigned by SQLite; no manual generation.
-
-    def _ensure_columns(self, conn: sqlite3.Connection) -> None:
-        """Reserved for future schema migrations (no-op for now)."""
-        return
-
-    def _row_to_note(self, row: sqlite3.Row | Sequence[str]) -> Note:
-        (
-            note_id,
-            title,
-            body,
-            description,
-            created_at_raw,
-            updated_at_raw,
-            can_publish_raw,
-        ) = row
-
-        return Note(
-            id=int(note_id),
-            title=title,
-            body=body,
-            description=description,
-            created_at=datetime.fromisoformat(created_at_raw),
-            updated_at=datetime.fromisoformat(updated_at_raw),
-            can_publish=bool(int(can_publish_raw)),
-        )
+    def _binding(self) -> Iterator[type[Note]]:
+        with self._database.connection_context():
+            with Note.bind_ctx(self._database):
+                yield Note
