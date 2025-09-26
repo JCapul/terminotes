@@ -18,3 +18,9 @@ test:
 
 precommit:
 	uv run pre-commit run --all-files
+
+release bump="patch":
+	uv run python scripts/prepare_release.py {{bump}}
+
+publish:
+	uv publish
