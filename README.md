@@ -10,7 +10,7 @@ It focuses on fast capture from the shell, durable storage in SQLite, and simple
 - Fast capture via editor (`tn edit`) and direct log entries (`tn log -- ...`).
 - SQLite storage with simple schema and safe parameterized queries.
 - Git-backed portability: store the DB in a repo and sync on demand.
-- Practical commands: list, search, delete, info, and sync.
+- Practical commands: list, search, delete, info, sync, and export.
 
 ## Requirements
 
@@ -96,6 +96,11 @@ Below are the primary subcommands. Use `tn --help` and `tn <cmd> --help` for det
 - `sync` — Fetch, detect divergence, and push with the selected strategy.
   - Requires a clean working tree; commit or stash changes first.
   - Divergence prompt choices: `local-wins`, `remote-wins`, or `abort`.
+
+- `export` — Render notes to a static site or Markdown files.
+  - HTML: `tn export --to html --dest ./site --site-title "My Notes"`
+  - Markdown: `tn export --to markdown --dest ./markdown`
+  - Outputs go into the destination directory, which is created if missing.
 
 - `info` — Show current repo path, totals, and last edited note.
 
