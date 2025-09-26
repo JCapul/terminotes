@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, timezone
-from typing import Callable
+from typing import Callable, Iterable
 
 from ..app import AppContext
 from ..editor import open_editor as default_open_editor
@@ -55,6 +55,7 @@ def create_log_entry(
     body: str,
     *,
     warn: WarnFunc | None = None,
+    tags: Iterable[str] | None = None,
 ) -> Note:
     """Create a new log-type note directly (no editor)."""
 
@@ -65,6 +66,7 @@ def create_log_entry(
         body=body,
         description="",
         can_publish=False,
+        tags=list(tags) if tags is not None else None,
     )
     # Commit the DB update locally (no network interaction).
     ctx.git_sync.commit_db_update(ctx.storage.path, f"chore(db): create log {note.id}")
@@ -88,6 +90,7 @@ def create_via_editor(
         "date": timestamp,
         "last_edited": timestamp,
         "can_publish": False,
+        "tags": [],
     }
 
     template = render_document(title="", body="", metadata=metadata)
@@ -95,6 +98,7 @@ def create_via_editor(
     parsed = parse_document(raw)
 
     can_publish_flag = _extract_can_publish(parsed.metadata, default=False)
+    note_tags = _extract_tags(parsed.metadata)
 
     created_at_dt = _parse_optional_dt(
         parsed.metadata.get("date"), field="date", warn=warn
@@ -110,6 +114,7 @@ def create_via_editor(
         created_at=created_at_dt,
         updated_at=updated_at_dt,
         can_publish=can_publish_flag,
+        tags=note_tags,
     )
     # Commit the DB update locally (no network interaction).
     ctx.git_sync.commit_db_update(ctx.storage.path, f"chore(db): create note {note.id}")
@@ -144,6 +149,7 @@ def update_via_editor(
         "date": to_user_friendly_utc(existing.created_at),
         "last_edited": to_user_friendly_utc(existing.updated_at),
         "can_publish": existing.can_publish,
+        "tags": sorted(tag.name for tag in existing.tags),
     }
 
     template = render_document(
@@ -162,6 +168,7 @@ def update_via_editor(
     new_can_publish = _extract_can_publish(
         parsed.metadata, default=existing.can_publish
     )
+    new_tags = _extract_tags(parsed.metadata)
 
     updated = ctx.storage.update_note(
         target_id,
@@ -171,6 +178,7 @@ def update_via_editor(
         created_at=created_at_dt,
         updated_at=updated_at_dt,
         can_publish=new_can_publish,
+        tags=new_tags,
     )
     # Commit the DB update locally (no network interaction).
     ctx.git_sync.commit_db_update(
@@ -206,3 +214,19 @@ def _extract_can_publish(metadata: dict[str, object], default: bool) -> bool:
         if val in {"false", "0", "no", "off"}:
             return False
     return default
+
+
+def _extract_tags(metadata: dict[str, object]) -> list[str]:
+    value = metadata.get("tags")
+    if isinstance(value, str):
+        name = value.strip()
+        return [name] if name else []
+    if isinstance(value, Iterable):
+        tags: list[str] = []
+        for item in value:
+            name = str(item).strip()
+            if not name or name in tags:
+                continue
+            tags.append(name)
+        return tags
+    return []

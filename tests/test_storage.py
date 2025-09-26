@@ -20,6 +20,7 @@ def test_create_note_persists_content(tmp_path) -> None:
     assert stored.body == ""
     assert stored.description == ""
     assert stored.created_at == stored.updated_at
+    assert list(stored.tags) == []
 
 
 def test_create_note_rejects_empty_content(tmp_path) -> None:
@@ -66,3 +67,20 @@ def test_fetch_last_updated_note(tmp_path) -> None:
 
     latest = storage.fetch_last_updated_note()
     assert latest.id == first.id
+
+
+def test_tags_created_and_updated(tmp_path) -> None:
+    storage = Storage(tmp_path / DB_FILENAME)
+    storage.initialize()
+
+    created = storage.create_note("Tagged", "Body", tags=["Work", "personal", "Work"])
+    assert sorted(tag.name for tag in created.tags) == ["personal", "work"]
+
+    updated = storage.update_note(created.id, "Tagged", "Body", tags=["focus"])
+    assert [tag.name for tag in updated.tags] == ["focus"]
+
+    cleared = storage.update_note(created.id, "Tagged", "Body", tags=[])
+    assert list(cleared.tags) == []
+
+    fetched = storage.fetch_note(created.id)
+    assert list(fetched.tags) == []

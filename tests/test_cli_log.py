@@ -9,7 +9,7 @@ from click.testing import CliRunner
 from terminotes import cli
 from terminotes import config as config_module
 from terminotes.git_sync import GitSync
-from terminotes.storage import DB_FILENAME
+from terminotes.storage import DB_FILENAME, Storage
 
 
 def _write_config(base_dir: Path) -> Path:
@@ -74,6 +74,34 @@ def test_log_creates_note_with_body_and_tags(tmp_path: Path, monkeypatch) -> Non
     # Title is derived from the first line/sentence when logging directly.
     assert title == "This is a log #til #python"
     assert body == "This is a log #til #python"
+
+
+def test_log_accepts_explicit_tags(tmp_path: Path, monkeypatch) -> None:
+    config_path = _write_config(tmp_path)
+    repo_dir = tmp_path / "notes-repo"
+    _set_default_paths(config_path, monkeypatch)
+    monkeypatch.setattr(GitSync, "ensure_local_clone", lambda self: None)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        cli.cli,
+        [
+            "log",
+            "--message",
+            "Tagged entry",
+            "--tag",
+            "Work",
+            "--tag",
+            "personal",
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+
+    storage = Storage(repo_dir / DB_FILENAME)
+    storage.initialize()
+    note = storage.fetch_note(1)
+    assert sorted(tag.name for tag in note.tags) == ["personal", "work"]
 
 
 def test_log_with_message_option_handles_hashtags(tmp_path: Path, monkeypatch) -> None:

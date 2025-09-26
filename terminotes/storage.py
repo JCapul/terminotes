@@ -5,12 +5,13 @@ from __future__ import annotations
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterator
+from typing import Iterable
 
 from peewee import (
     AutoField,
     BooleanField,
     DoesNotExist,
+    ManyToManyField,
     Model,
     SqliteDatabase,
     TextField,
@@ -19,6 +20,7 @@ from peewee import (
 
 DB_FILENAME = "terminotes.sqlite3"
 TABLE_NOTES = "notes"
+TABLE_TAGS = "tags"
 
 
 def _utc_now() -> datetime:
@@ -33,24 +35,27 @@ def _coerce_utc(dt: datetime | None) -> datetime:
     return dt.astimezone(timezone.utc)
 
 
+def _normalize_tag_name(raw: str) -> str | None:
+    name = str(raw).strip().lower()
+    return name or None
+
+
+def _prepare_tags(tags: Iterable[str] | None) -> list[str]:
+    if not tags:
+        return []
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for item in tags:
+        value = _normalize_tag_name(item)
+        if value is None or value in seen:
+            continue
+        normalized.append(value)
+        seen.add(value)
+    return normalized
+
+
 class StorageError(RuntimeError):
     """Raised when interacting with the notes database fails."""
-
-
-class UTCTextDateField(TextField):
-    """Store ISO-8601 timestamps while returning timezone-aware datetimes."""
-
-    def python_value(self, value: str | None) -> datetime | None:  # type: ignore[override]
-        if value is None:
-            return None
-        dt = datetime.fromisoformat(value)
-        return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
-
-    def db_value(self, value: datetime | None) -> str | None:  # type: ignore[override]
-        if value is None:
-            return None
-        coerced = _coerce_utc(value)
-        return coerced.isoformat()
 
 
 class StorageDatabase(SqliteDatabase):
@@ -71,6 +76,32 @@ class StorageModel(Model):
         database = SqliteDatabase(None)
 
 
+class Tag(StorageModel):
+    """Represents a unique tag label."""
+
+    id = AutoField()
+    name = TextField(unique=True)
+
+    class Meta:
+        table_name = TABLE_TAGS
+
+
+class UTCTextDateField(TextField):
+    """Store ISO-8601 timestamps while returning timezone-aware datetimes."""
+
+    def python_value(self, value: str | None) -> datetime | None:  # type: ignore[override]
+        if value is None:
+            return None
+        dt = datetime.fromisoformat(value)
+        return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+
+    def db_value(self, value: datetime | None) -> str | None:  # type: ignore[override]
+        if value is None:
+            return None
+        coerced = _coerce_utc(value)
+        return coerced.isoformat()
+
+
 class Note(StorageModel):
     """Peewee model representing a stored note."""
 
@@ -81,6 +112,7 @@ class Note(StorageModel):
     created_at = UTCTextDateField(default=_utc_now, null=False)
     updated_at = UTCTextDateField(default=_utc_now, null=False)
     can_publish = BooleanField(default=False, null=False)
+    tags = ManyToManyField(Tag, backref="notes")
 
     class Meta:
         table_name = TABLE_NOTES
@@ -92,6 +124,8 @@ class Storage:
     def __init__(self, path: Path | str) -> None:
         self.path = Path(path)
         self._database = StorageDatabase(self.path)
+        self._through_model = Note.tags.get_through_model()
+        self._database.bind([Note, Tag, self._through_model])
 
     def initialize(self) -> None:
         try:
@@ -99,9 +133,11 @@ class Storage:
         except OSError as exc:  # pragma: no cover - filesystem failures are rare
             raise StorageError(f"Failed to create database directory: {exc}") from exc
 
-        with self._binding() as note_model:
+        with self._connection():
             try:
-                note_model.create_table(safe=True)
+                self._database.create_tables(
+                    [Tag, Note, self._through_model], safe=True
+                )
             except Exception as exc:  # pragma: no cover - defensive
                 raise StorageError(f"Failed to initialize database: {exc}") from exc
 
@@ -114,6 +150,7 @@ class Storage:
         created_at: datetime | None = None,
         updated_at: datetime | None = None,
         can_publish: bool = False,
+        tags: Iterable[str] | None = None,
     ) -> Note:
         normalized_title = title.strip()
         normalized_body = body.rstrip()
@@ -122,10 +159,11 @@ class Storage:
 
         created = _coerce_utc(created_at)
         updated = _coerce_utc(updated_at) if updated_at is not None else created
+        tag_names = _prepare_tags(tags)
 
-        with self._binding() as note_model:
+        with self._connection():
             try:
-                note = note_model.create(
+                note = Note.create(
                     title=normalized_title,
                     body=normalized_body,
                     description=description,
@@ -136,24 +174,33 @@ class Storage:
             except Exception as exc:  # pragma: no cover - defensive
                 raise StorageError(f"Failed to insert note: {exc}") from exc
 
+            if tag_names:
+                try:
+                    tag_models = [Tag.get_or_create(name=name)[0] for name in tag_names]
+                except Exception as exc:  # pragma: no cover - defensive
+                    raise StorageError(f"Failed to save tags: {exc}") from exc
+                note.tags.add(tag_models)
+
         return note
 
-    def list_notes(self, limit: int = 10) -> list[Note]:
+    def list_notes(
+        self, limit: int = 10, *, tags: Iterable[str] | None = None
+    ) -> list[Note]:
         if limit <= 0:
             return []
 
-        with self._binding() as note_model:
-            query = (
-                note_model.select()
-                .order_by(note_model.updated_at.desc())
-                .limit(int(limit))
-            )
+        tag_names = _prepare_tags(tags)
+        with self._connection():
+            query = Note.select().order_by(Note.updated_at.desc())
+            if tag_names:
+                query = self._apply_tag_filter(query, tag_names)
+            query = query.limit(int(limit))
             return list(query)
 
     def fetch_note(self, note_id: int) -> Note:
-        with self._binding() as note_model:
+        with self._connection():
             try:
-                return note_model.get_by_id(int(note_id))
+                return Note.get_by_id(int(note_id))
             except DoesNotExist:
                 raise StorageError(f"Note '{note_id}' not found.") from None
 
@@ -167,6 +214,7 @@ class Storage:
         created_at: datetime | None = None,
         updated_at: datetime | None = None,
         can_publish: bool | None = None,
+        tags: Iterable[str] | None = None,
     ) -> Note:
         normalized_title = title.strip()
         normalized_body = body.rstrip()
@@ -175,10 +223,11 @@ class Storage:
 
         new_updated = _coerce_utc(updated_at)
         new_created = _coerce_utc(created_at) if created_at is not None else None
+        tag_names = _prepare_tags(tags) if tags is not None else None
 
-        with self._binding() as note_model:
+        with self._connection():
             try:
-                note = note_model.get_by_id(int(note_id))
+                note = Note.get_by_id(int(note_id))
             except DoesNotExist:
                 raise StorageError(f"Note '{note_id}' not found.") from None
 
@@ -192,50 +241,72 @@ class Storage:
                 note.can_publish = can_publish
 
             note.save()
-            return note
+
+            if tag_names is not None:
+                try:
+                    tag_models = [Tag.get_or_create(name=name)[0] for name in tag_names]
+                except Exception as exc:  # pragma: no cover - defensive
+                    raise StorageError(f"Failed to save tags: {exc}") from exc
+                note.tags.clear()
+                if tag_models:
+                    note.tags.add(tag_models)
+
+        return note
 
     def fetch_last_updated_note(self) -> Note:
-        with self._binding() as note_model:
-            note = (
-                note_model.select()
-                .order_by(note_model.updated_at.desc())
-                .limit(1)
-                .first()
-            )
+        with self._connection():
+            note = Note.select().order_by(Note.updated_at.desc()).limit(1).first()
             if note is None:
                 raise StorageError("No notes available.")
             return note
 
     def count_notes(self) -> int:
-        with self._binding() as note_model:
-            return note_model.select().count()
+        with self._connection():
+            return Note.select().count()
 
     def delete_note(self, note_id: int) -> None:
-        with self._binding() as note_model:
-            deleted = note_model.delete().where(note_model.id == int(note_id)).execute()
+        with self._connection():
+            deleted = Note.delete().where(Note.id == int(note_id)).execute()
             if deleted == 0:
                 raise StorageError(f"Note '{note_id}' not found.")
 
-    def search_notes(self, pattern: str) -> list[Note]:
+    def search_notes(
+        self,
+        pattern: str,
+        *,
+        tags: Iterable[str] | None = None,
+    ) -> list[Note]:
         text = str(pattern)
         if not text:
             return []
 
-        with self._binding() as note_model:
-            lowered = text.lower()
+        lowered = text.lower()
+        tag_names = _prepare_tags(tags)
+
+        with self._connection():
             query = (
-                note_model.select()
+                Note.select()
                 .where(
-                    (fn.LOWER(note_model.title).contains(lowered))
-                    | (fn.LOWER(note_model.body).contains(lowered))
-                    | (fn.LOWER(note_model.description).contains(lowered))
+                    (fn.LOWER(Note.title).contains(lowered))
+                    | (fn.LOWER(Note.body).contains(lowered))
+                    | (fn.LOWER(Note.description).contains(lowered))
                 )
-                .order_by(note_model.updated_at.desc())
+                .order_by(Note.updated_at.desc())
             )
+            if tag_names:
+                query = self._apply_tag_filter(query, tag_names)
             return list(query)
 
     @contextmanager
-    def _binding(self) -> Iterator[type[Note]]:
+    def _connection(self):
         with self._database.connection_context():
-            with Note.bind_ctx(self._database):
-                yield Note
+            yield
+
+    def _apply_tag_filter(self, query, tag_names: list[str]):
+        through = self._through_model
+        return (
+            query.join(through, on=(through.note == Note.id))
+            .join(Tag)
+            .where(Tag.name.in_(tag_names))
+            .distinct()
+        )

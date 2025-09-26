@@ -89,16 +89,17 @@ Below are the primary subcommands. Use `uv run tn --help` and `uv run tn <cmd> -
   - Edit last updated: `uv run tn edit --last`
 
 - `log` — Quick log entry without opening an editor.
-  - Example: `uv run tn log -- This is a log #til #python`
+  - Example: `uv run tn log --tag work --tag focus -- This is a log entry`
   - Title is derived from the first sentence or line, truncated when long.
+  - Repeat `--tag` to associate tags; tag names are normalized to lowercase.
 
 - `ls` — List most recent notes (by last edit time).
-  - Example: `uv run tn ls --limit 10`
-  - Options: `--limit/-n`, `--reverse` (oldest first for current sort)
+  - Example: `uv run tn ls --limit 10 --tag work`
+  - Options: `--limit/-n`, `--reverse`, `--tag/--tag` (filter by tag; repeatable)
 
 - `search` — Simple case-insensitive substring search across title/body/description.
-  - Example: `uv run tn search "python" --limit 20`
-  - Options: `--limit/-n`, `--reverse`
+  - Example: `uv run tn search python --tag personal`
+  - Options: `--limit/-n`, `--reverse`, `--tag/--tag`
 
 - `delete` — Delete a note by id.
   - Example: `uv run tn delete --yes 42`
@@ -131,6 +132,7 @@ Notes are stored in an SQLite file named `terminotes.sqlite3` under `terminotes_
 - `created_at` (TEXT, ISO 8601)
 - `updated_at` (TEXT, ISO 8601)
 - `can_publish` (INTEGER as boolean)
+- Tags are stored in a normalized (lowercase) many-to-many table; each note can belong to multiple tags and vice versa.
 
 Timestamps are stored in UTC.
 

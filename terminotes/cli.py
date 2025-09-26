@@ -15,8 +15,7 @@ from .config import (
     TerminotesConfig,
     bootstrap_config_file,
 )
-from .editor import EditorError
-from .editor import open_editor as open_editor
+from .editor import EditorError, open_editor
 from .git_sync import GitSync, GitSyncError
 from .services.notes import create_log_entry, create_via_editor, update_via_editor
 from .storage import Storage, StorageError
@@ -131,9 +130,21 @@ def edit(ctx: click.Context, note_id: int | None, edit_last: bool) -> None:
     default=None,
     help=("Log message text. Prefer this when using hashtags to avoid shell comments."),
 )
+@click.option(
+    "-t",
+    "--tag",
+    "tags",
+    multiple=True,
+    help="Tag to associate with the new note (repeatable)",
+)
 @click.argument("content", nargs=-1)
 @click.pass_context
-def log(ctx: click.Context, message_opt: str | None, content: tuple[str, ...]) -> None:
+def log(
+    ctx: click.Context,
+    message_opt: str | None,
+    content: tuple[str, ...],
+    tags: tuple[str, ...],
+) -> None:
     """Create a new log entry from CLI content.
 
     Usage: tn log -- This is a log entry
@@ -151,7 +162,7 @@ def log(ctx: click.Context, message_opt: str | None, content: tuple[str, ...]) -
         raise TerminotesCliError("Body is required for 'tn log'.")
 
     try:
-        note = create_log_entry(app, body)
+        note = create_log_entry(app, body, tags=tags)
     except (StorageError, GitSyncError) as exc:  # pragma: no cover - pass-through
         raise TerminotesCliError(str(exc)) from exc
 
@@ -299,15 +310,22 @@ def config(ctx: click.Context) -> None:
     is_flag=True,
     help="Reverse order (oldest first for current sort)",
 )
+@click.option(
+    "-t",
+    "--tag",
+    "tags",
+    multiple=True,
+    help="Filter notes by tag (repeatable)",
+)
 @click.pass_context
-def ls(ctx: click.Context, limit: int, reverse: bool) -> None:
+def ls(ctx: click.Context, limit: int, reverse: bool, tags: tuple[str, ...]) -> None:
     """List the most recent notes (by last edit time)."""
 
     app: AppContext = ctx.obj["app"]
     storage: Storage = app.storage
 
     try:
-        notes = list(storage.list_notes(limit=limit))
+        notes = list(storage.list_notes(limit=limit, tags=tags))
     except StorageError as exc:  # pragma: no cover - pass-through
         raise TerminotesCliError(str(exc)) from exc
 
@@ -317,7 +335,9 @@ def ls(ctx: click.Context, limit: int, reverse: bool) -> None:
     for n in notes:
         updated = to_user_friendly_utc(n.updated_at)
         title = n.title or ""
-        click.echo(f"{n.id:>4}  {updated}  {title}")
+        tag_list = sorted(tag.name for tag in n.tags)
+        tag_suffix = f"  [tags: {', '.join(tag_list)}]" if tag_list else ""
+        click.echo(f"{n.id:>4}  {updated}  {title}{tag_suffix}")
 
 
 @cli.command()
@@ -329,8 +349,21 @@ def ls(ctx: click.Context, limit: int, reverse: bool) -> None:
     is_flag=True,
     help="Reverse order (oldest first for current sort)",
 )
+@click.option(
+    "-t",
+    "--tag",
+    "tags",
+    multiple=True,
+    help="Filter matches by tag (repeatable)",
+)
 @click.pass_context
-def search(ctx: click.Context, pattern: str, limit: int, reverse: bool) -> None:
+def search(
+    ctx: click.Context,
+    pattern: str,
+    limit: int,
+    reverse: bool,
+    tags: tuple[str, ...],
+) -> None:
     """Search notes for a pattern (case-insensitive substring)."""
 
     app: AppContext = ctx.obj["app"]
@@ -341,7 +374,7 @@ def search(ctx: click.Context, pattern: str, limit: int, reverse: bool) -> None:
         raise TerminotesCliError("Search pattern must not be empty.")
 
     try:
-        matches = list(storage.search_notes(pat))
+        matches = list(storage.search_notes(pat, tags=tags))
     except StorageError as exc:  # pragma: no cover - pass-through
         raise TerminotesCliError(str(exc)) from exc
 
@@ -358,7 +391,9 @@ def search(ctx: click.Context, pattern: str, limit: int, reverse: bool) -> None:
     for n in matches:
         updated = to_user_friendly_utc(n.updated_at)
         title = n.title or ""
-        click.echo(f"{n.id:>4}  {updated}  {title}")
+        tag_list = sorted(tag.name for tag in n.tags)
+        tag_suffix = f"  [tags: {', '.join(tag_list)}]" if tag_list else ""
+        click.echo(f"{n.id:>4}  {updated}  {title}{tag_suffix}")
 
 
 @cli.command()

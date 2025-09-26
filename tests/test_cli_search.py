@@ -111,3 +111,36 @@ def test_search_no_results_prints_nothing(tmp_path: Path, monkeypatch) -> None:
     result = runner.invoke(cli.cli, ["search", "nomatch"])
     assert result.exit_code == 0, result.output
     assert result.output.strip() == ""
+
+
+def test_search_filters_by_tags(tmp_path: Path, monkeypatch) -> None:
+    config_path = _write_config(tmp_path)
+    repo_dir = tmp_path / "notes-repo"
+    _set_default_paths(config_path, monkeypatch)
+
+    storage = Storage(repo_dir / DB_FILENAME)
+    storage.initialize()
+
+    base = datetime(2024, 1, 1, 12, 0, tzinfo=timezone.utc)
+    storage.create_note(
+        "Alpha",
+        "needle here",
+        created_at=base,
+        updated_at=base,
+        tags=["work"],
+    )
+    tagged = storage.create_note(
+        "Beta",
+        "needle again",
+        created_at=base,
+        updated_at=base,
+        tags=["personal"],
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(cli.cli, ["search", "needle", "--tag", "personal"])
+    assert result.exit_code == 0, result.output
+    lines = [line for line in result.output.splitlines() if line.strip()]
+    assert len(lines) == 1
+    assert str(tagged.id) in lines[0]
+    assert "tags: personal" in lines[0]

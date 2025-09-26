@@ -66,6 +66,7 @@ def test_new_command_creates_note_with_metadata(tmp_path, monkeypatch) -> None:
             'title = "Captured Title"\n'
             'date = "2024-01-01T12:00:00+00:00"\n'
             'last_edited = "2024-01-01T12:00:00+00:00"\n'
+            'tags = ["Work", "Focus"]\n'
             "+++\n\n"
             "Body from editor. #til #python\n"
         )
@@ -82,10 +83,16 @@ def test_new_command_creates_note_with_metadata(tmp_path, monkeypatch) -> None:
     metadata = tomllib.loads(metadata_block)
     assert "date" in metadata
     assert "last_edited" in metadata
+    assert metadata.get("tags") == []
 
     title, body = _read_single_note(repo_dir / DB_FILENAME)
     assert title == "Captured Title"
     assert body == "Body from editor. #til #python"
+
+    storage = Storage(repo_dir / DB_FILENAME)
+    storage.initialize()
+    stored_note = storage.fetch_note(1)
+    assert sorted(tag.name for tag in stored_note.tags) == ["focus", "work"]
 
 
 def test_new_command_respects_custom_timestamps(tmp_path, monkeypatch) -> None:
@@ -126,7 +133,7 @@ def test_edit_command_updates_note_and_metadata(tmp_path, monkeypatch) -> None:
 
     storage = Storage(repo_dir / DB_FILENAME)
     storage.initialize()
-    note = storage.create_note("Existing Title", "Body")
+    note = storage.create_note("Existing Title", "Body", tags=["initial"])
 
     captured_template: dict[str, str] = {}
 
@@ -137,6 +144,7 @@ def test_edit_command_updates_note_and_metadata(tmp_path, monkeypatch) -> None:
             'title = "Updated Title"\n'
             f'date = "{note.created_at.isoformat()}"\n'
             f'last_edited = "{datetime.now().isoformat()}"\n'
+            'tags = ["Updated", "Focus"]\n'
             "+++\n\n"
             "Updated body. #python\n"
         )
@@ -153,10 +161,14 @@ def test_edit_command_updates_note_and_metadata(tmp_path, monkeypatch) -> None:
     metadata = tomllib.loads(metadata_block)
     assert metadata["title"] == "Existing Title"
     assert "last_edited" in metadata
+    assert metadata.get("tags") == ["initial"]
 
     title, body = _read_single_note(repo_dir / DB_FILENAME)
     assert title == "Updated Title"
     assert body == "Updated body. #python"
+
+    updated_note = storage.fetch_note(note.id)
+    assert sorted(tag.name for tag in updated_note.tags) == ["focus", "updated"]
 
 
 def test_edit_command_allows_changing_timestamps(tmp_path, monkeypatch) -> None:
