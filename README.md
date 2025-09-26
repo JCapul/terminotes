@@ -33,7 +33,7 @@ This places the `tn` console script on your `PATH`, so you can invoke Terminotes
 1) Create or edit your configuration file:
 
 ```bash
-uv run tn config
+tn config
 ```
 
 This bootstraps a TOML file (default `~/.config/terminotes/config.toml`). Update it to point to your notes repo and editor. Minimal example:
@@ -49,48 +49,48 @@ Important: `git_remote_url` is required. Terminotes ensures a local clone exists
 2) Capture a first note:
 
 ```bash
-uv run tn edit
+tn edit
 ```
 
 3) List your notes:
 
 ```bash
-uv run tn ls --limit 10
+tn ls --limit 10
 ```
 
 4) Sync with the remote when ready:
 
 ```bash
-uv run tn sync
+tn sync
 ```
 
 ## Usage
 
-Below are the primary subcommands. Use `uv run tn --help` and `uv run tn <cmd> --help` for details.
+Below are the primary subcommands. Use `tn --help` and `tn <cmd> --help` for details.
 
 - `config` — Create/open the config file in your editor.
-  - Example: `uv run tn config`
+  - Example: `tn config`
 
 - `edit` — Create a new note or edit an existing one.
-  - New note: `uv run tn edit`
-  - Edit by id: `uv run tn edit --id 42`
-  - Edit last updated: `uv run tn edit --last`
+  - New note: `tn edit`
+  - Edit by id: `tn edit --id 42`
+  - Edit last updated: `tn edit --last`
 
 - `log` — Quick log entry without opening an editor.
-  - Example: `uv run tn log --tag work --tag focus -- This is a log entry`
+  - Example: `tn log --tag work --tag focus -- This is a log entry`
   - Title is derived from the first sentence or line, truncated when long.
   - Repeat `--tag` to associate tags; tag names are normalized to lowercase.
 
 - `ls` — List most recent notes (by last edit time).
-  - Example: `uv run tn ls --limit 10 --tag work`
+  - Example: `tn ls --limit 10 --tag work`
   - Options: `--limit/-n`, `--reverse`, `--tag/--tag` (filter by tag; repeatable)
 
 - `search` — Simple case-insensitive substring search across title/body/description.
-  - Example: `uv run tn search python --tag personal`
+  - Example: `tn search python --tag personal`
   - Options: `--limit/-n`, `--reverse`, `--tag/--tag`
 
 - `delete` — Delete a note by id.
-  - Example: `uv run tn delete --yes 42`
+  - Example: `tn delete --yes 42`
   - Uses a confirmation prompt unless `--yes` is provided.
 
 - `sync` — Fetch, detect divergence, and push with the selected strategy.
