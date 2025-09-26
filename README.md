@@ -1,6 +1,6 @@
 # Terminotes
 
-Terminotes is a terminal-first note taking CLI, 99% vibecoded with Codex CLI and GPT-5 under my tight supervision 😉
+Terminotes is a terminal-first note taking CLI, 99% vibecoded with Codex CLI and GPT-5 under my tight supervision 😉.
 
 It focuses on fast capture from the shell, durable storage in SQLite, and simple Git synchronization so you can keep your notes database in a repo and carry it between machines.
 
@@ -175,24 +175,7 @@ Pull requests are welcome. Before submitting:
 
 See `AGENTS.md` for repository conventions and tips.
 
-## Roadmap
-
-- JSON output for `ls` and `search`.
-- Sort options for `ls` (e.g., by created time).
-- Full-text search via SQLite FTS5.
-- Additional metadata and export tools.
-
-## Troubleshooting
-
-- “Configuration not found”: run `uv run tn config` to create a config file.
-- “Working tree has uncommitted changes”: commit or stash before `tn sync`.
-- Non-interactive environments cannot prompt for divergence resolution; run `tn sync` in a terminal.
-
 ## Security
 
 - Keep secrets and credentials outside the repo (e.g., system git credentials).
 - Terminotes validates inputs and parameterizes SQL; avoid pasting secrets into notes you intend to publish.
-
-## License
-
-License information will be added before a stable release.
