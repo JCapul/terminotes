@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from terminotes.storage import DB_FILENAME, Storage, StorageError
 
 
@@ -84,3 +86,24 @@ def test_tags_created_and_updated(tmp_path) -> None:
 
     fetched = storage.fetch_note(created.id)
     assert list(fetched.tags) == []
+
+
+def test_extra_data_round_trip(tmp_path) -> None:
+    storage = Storage(tmp_path / DB_FILENAME)
+    storage.initialize()
+
+    payload = {
+        "link": {"source_url": "https://example.com", "wayback": "https://archive"}
+    }
+    created = storage.create_note("Link note", "Body", extra_data=payload)
+
+    fetched = storage.fetch_note(created.id)
+    assert fetched.extra_data is not None
+    assert json.loads(fetched.extra_data) == payload
+
+    snapshot = storage.snapshot_notes()[0]
+    assert snapshot.extra_data == payload
+
+    storage.update_note(created.id, "Link note", "Body", extra_data=None)
+    refetched = storage.fetch_note(created.id)
+    assert refetched.extra_data is None

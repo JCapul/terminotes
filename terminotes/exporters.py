@@ -123,6 +123,7 @@ class HtmlExporter:
                     "updated": updated_pretty,
                     "tags_display": tags_display,
                     "summary": summary_display,
+                    "extra_data": note.extra_data,
                 }
             )
 
@@ -137,6 +138,7 @@ class HtmlExporter:
                     "tags": note.tags,
                     "url": url,
                     "summary": summary_text,
+                    "extra_data": note.extra_data,
                 }
             )
 
@@ -184,6 +186,9 @@ class MarkdownExporter:
                 "can_publish": bool(note.can_publish),
                 "tags": note.tags,
             }
+
+            if note.extra_data is not None:
+                metadata["extra_data"] = note.extra_data
 
             yaml_text = yaml.safe_dump(
                 metadata,

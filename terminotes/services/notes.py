@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from datetime import datetime, timezone
 from typing import Callable, Iterable
+from urllib.parse import urlparse
 
 from ..app import AppContext
 from ..editor import open_editor as default_open_editor
@@ -15,6 +16,7 @@ from ..utils.datetime_fmt import (
     parse_user_datetime,
     to_user_friendly_utc,
 )
+from ..utils.wayback import fetch_latest_snapshot
 
 WarnFunc = Callable[[str], None]
 EditFunc = Callable[[str, str | None], str]
@@ -50,6 +52,14 @@ def _derive_title_from_body(body: str, *, max_len: int = MAX_TITLE_CHARS) -> str
     return candidate[: max_len - 1].rstrip() + "\u2026"
 
 
+def _title_from_url(url: str, *, max_len: int = MAX_TITLE_CHARS) -> str:
+    parsed = urlparse(url)
+    host = parsed.netloc or url
+    if len(host) <= max_len:
+        return host
+    return host[: max_len - 1].rstrip(" -.") + "\u2026"
+
+
 def create_log_entry(
     ctx: AppContext,
     body: str,
@@ -71,6 +81,64 @@ def create_log_entry(
     # Commit the DB update locally (no network interaction).
     ctx.git_sync.commit_db_update(ctx.storage.path, f"chore(db): create log {note.id}")
     return note
+
+
+def create_link_entry(
+    ctx: AppContext,
+    url: str,
+    comment: str = "",
+    *,
+    warn: WarnFunc | None = None,
+    tags: Iterable[str] | None = None,
+) -> tuple[Note, dict[str, str] | None]:
+    """Create a note representing a saved link with optional comment."""
+
+    source_url = url.strip()
+    if not source_url:
+        raise ValueError("A URL is required to create a link note.")
+
+    comment_text = comment.strip()
+
+    snapshot = fetch_latest_snapshot(source_url)
+    if snapshot is None and warn is not None:
+        warn("No Wayback snapshot found for the provided URL.")
+
+    extra_data = {
+        "link": {
+            "source_url": source_url,
+            "wayback": snapshot,
+        }
+    }
+
+    body_lines: list[str] = []
+    if comment_text:
+        body_lines.append(comment_text)
+        body_lines.append("")
+    body_lines.append(source_url)
+    if snapshot is not None:
+        body_lines.append("")
+        body_lines.append(f"Wayback fallback: {snapshot['url']}")
+        timestamp = snapshot.get("timestamp")
+        if timestamp:
+            body_lines.append(f"Snapshot captured: {timestamp}")
+
+    body = "\n".join(body_lines)
+
+    title = comment_text or _title_from_url(source_url)
+    description = comment_text
+
+    link_tags = ["link"] + list(tags or [])
+
+    note = ctx.storage.create_note(
+        title=title,
+        body=body,
+        description=description,
+        can_publish=False,
+        tags=link_tags,
+        extra_data=extra_data,
+    )
+    ctx.git_sync.commit_db_update(ctx.storage.path, f"chore(db): create link {note.id}")
+    return note, snapshot
 
 
 def create_via_editor(

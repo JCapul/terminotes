@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
 
 from peewee import (
     AutoField,
@@ -22,6 +23,9 @@ from peewee import (
 DB_FILENAME = "terminotes.sqlite3"
 TABLE_NOTES = "notes"
 TABLE_TAGS = "tags"
+
+_UNSET = object()
+ExtraData = dict[str, Any] | None
 
 
 def _utc_now() -> datetime:
@@ -113,6 +117,7 @@ class Note(StorageModel):
     created_at = UTCTextDateField(default=_utc_now, null=False)
     updated_at = UTCTextDateField(default=_utc_now, null=False)
     can_publish = BooleanField(default=False, null=False)
+    extra_data = TextField(null=True)
     tags = ManyToManyField(Tag, backref="notes")
 
     class Meta:
@@ -142,6 +147,8 @@ class Storage:
             except Exception as exc:  # pragma: no cover - defensive
                 raise StorageError(f"Failed to initialize database: {exc}") from exc
 
+            self._ensure_extra_data_column()
+
     def create_note(
         self,
         title: str,
@@ -152,6 +159,7 @@ class Storage:
         updated_at: datetime | None = None,
         can_publish: bool = False,
         tags: Iterable[str] | None = None,
+        extra_data: ExtraData = None,
     ) -> Note:
         normalized_title = title.strip()
         normalized_body = body.rstrip()
@@ -171,6 +179,7 @@ class Storage:
                     created_at=created,
                     updated_at=updated,
                     can_publish=can_publish,
+                    extra_data=self._dump_extra_data(extra_data),
                 )
             except Exception as exc:  # pragma: no cover - defensive
                 raise StorageError(f"Failed to insert note: {exc}") from exc
@@ -216,6 +225,7 @@ class Storage:
         updated_at: datetime | None = None,
         can_publish: bool | None = None,
         tags: Iterable[str] | None = None,
+        extra_data: ExtraData | object = _UNSET,
     ) -> Note:
         normalized_title = title.strip()
         normalized_body = body.rstrip()
@@ -240,6 +250,8 @@ class Storage:
                 note.created_at = new_created
             if can_publish is not None:
                 note.can_publish = can_publish
+            if extra_data is not _UNSET:
+                note.extra_data = self._dump_extra_data(extra_data)
 
             note.save()
 
@@ -289,6 +301,7 @@ class Storage:
                         updated_at=note.updated_at,
                         can_publish=bool(note.can_publish),
                         tags=tag_names,
+                        extra_data=self._load_extra_data(note.extra_data),
                     )
                 )
         return snapshots
@@ -334,6 +347,35 @@ class Storage:
             .distinct()
         )
 
+    def _ensure_extra_data_column(self) -> None:
+        info = self._database.execute_sql(
+            f"PRAGMA table_info({TABLE_NOTES})"
+        ).fetchall()
+        has_column = any(row[1] == "extra_data" for row in info)
+        if not has_column:
+            self._database.execute_sql(
+                f"ALTER TABLE {TABLE_NOTES} ADD COLUMN extra_data TEXT"
+            )
+
+    @staticmethod
+    def _dump_extra_data(data: ExtraData) -> str | None:
+        if not data:
+            return None
+        try:
+            return json.dumps(data)
+        except TypeError as exc:  # pragma: no cover - defensive
+            raise StorageError(f"Failed to serialize extra data: {exc}") from exc
+
+    @staticmethod
+    def _load_extra_data(raw: str | None) -> ExtraData:
+        if raw is None:
+            return None
+        try:
+            loaded = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+        return loaded if isinstance(loaded, dict) else None
+
 
 @dataclass(slots=True)
 class NoteSnapshot:
@@ -347,3 +389,4 @@ class NoteSnapshot:
     updated_at: datetime
     can_publish: bool
     tags: list[str]
+    extra_data: ExtraData

@@ -21,10 +21,12 @@ Terminotes is a released Python CLI (current version 0.3.0) for jotting quick no
 - Let `ruff` handle linting (`ruff check`) and formatting (`ruff format`); run via `uv run` or `just`.
 - Front matter helpers (`terminotes/notes_frontmatter.py`) must emit and parse YAML via `yaml.safe_dump`/`yaml.safe_load`; keep TOML code paths out of new contributions.
 - HTML exports rely on Jinja2 templates in `terminotes/templates/export/html/`; use environment helpers in `terminotes/exporters.py` instead of manual string substitution.
+- Persist structured metadata through `Storage.create_note(..., extra_data=...)` and keep JSON payloads minimal and documented (link notes store `source_url` and `wayback` keys).
 
 ## Testing Guidelines
 - Pair each feature with unit tests; use descriptive names like `test_update_rejects_unknown_tag`.
 - Cover SQLite persistence, git clone/commit/push flows (mock git when feasible), CLI argument parsing, and YAML front matter round-trips.
+- Exercise link capture flows (`tn link`) including Wayback fallbacks and `extra_data` serialization (mock network calls).
 - Keep lightweight fixtures in `tests/fixtures/` for sample notes and tag lists.
 - Target ≥80% coverage once instrumentation is configured (`uv run pytest --cov=terminotes`).
 
@@ -51,3 +53,4 @@ Terminotes is a released Python CLI (current version 0.3.0) for jotting quick no
 ## Pre-release Compatibility
 - The project remains <1.0, but 0.3.0 is published. Preserve observable behavior when practical, especially for YAML front matter and exported templates.
 - We may still rename config keys and APIs as needed. Prefer additive migrations and document breaking changes in `CHANGELOG.md`.
+- The `notes.extra_data` column is now part of the schema; coordinate migrations and ensure backward compatibility with existing databases when introducing new shapes.

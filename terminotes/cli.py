@@ -20,7 +20,12 @@ from .editor import EditorError, open_editor
 from .exporters import ExportError
 from .git_sync import GitSync, GitSyncError
 from .services.export import export_notes as run_export
-from .services.notes import create_log_entry, create_via_editor, update_via_editor
+from .services.notes import (
+    create_link_entry,
+    create_log_entry,
+    create_via_editor,
+    update_via_editor,
+)
 from .storage import Storage, StorageError
 from .utils.datetime_fmt import to_user_friendly_utc
 
@@ -158,6 +163,44 @@ def log(
         raise TerminotesCliError(str(exc)) from exc
 
     click.echo(f"Created note {note.id} (tagged as log)")
+
+
+@cli.command(name="link")
+@click.argument("url")
+@click.argument("comment", nargs=-1)
+@click.option(
+    "-t",
+    "--tag",
+    "tags",
+    multiple=True,
+    help="Tag to associate with the link note (repeatable)",
+)
+@click.pass_context
+def link(
+    ctx: click.Context, url: str, comment: tuple[str, ...], tags: tuple[str, ...]
+) -> None:
+    """Capture a URL with optional comment and Wayback fallback."""
+
+    app: AppContext = ctx.obj["app"]
+    comment_text = " ".join(comment).strip()
+
+    try:
+        note, snapshot = create_link_entry(
+            app,
+            url,
+            comment_text,
+            tags=tags,
+            warn=lambda msg: click.echo(msg),
+        )
+    except ValueError as exc:
+        raise TerminotesCliError(str(exc)) from exc
+    except (StorageError, GitSyncError) as exc:
+        raise TerminotesCliError(str(exc)) from exc
+
+    if snapshot is not None:
+        click.echo(f"Saved link note {note.id} (Wayback fallback: {snapshot['url']})")
+    else:
+        click.echo(f"Saved link note {note.id}")
 
 
 @cli.command(name="delete")

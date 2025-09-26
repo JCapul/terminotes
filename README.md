@@ -11,6 +11,7 @@ It focuses on fast capture from the shell, durable storage in SQLite, and simple
 - SQLite storage with simple schema and safe parameterized queries.
 - Git-backed portability: store the DB in a repo and sync on demand.
 - Practical commands: list, search, delete, info, sync, and export.
+- Link capture with `tn link`, optionally tagging notes and storing Wayback fallbacks.
 
 ## Requirements
 
@@ -80,6 +81,9 @@ Below are the primary subcommands. Use `tn --help` and `tn <cmd> --help` for det
   - Example: `tn log --tag work --tag focus -- This is a log entry`
   - Title is derived from the first sentence or line, truncated when long.
   - Repeat `--tag` to associate tags; tag names are normalized to lowercase.
+- `link` — Save a URL with optional comment and Wayback fallback metadata.
+  - Example: `tn link https://example.com "Great article" --tag reading`
+  - Automatically adds the `link` tag and stores the latest archived snapshot (when available) under the note's extra data.
 
 - `ls` — List most recent notes (by last edit time).
   - Example: `tn ls --limit 10 --tag work`
@@ -125,6 +129,7 @@ Notes are stored in an SQLite file named `terminotes.sqlite3` under `terminotes_
 - `created_at` (TEXT, ISO 8601)
 - `updated_at` (TEXT, ISO 8601)
 - `can_publish` (INTEGER as boolean)
+- `extra_data` (TEXT as JSON) for structured metadata, e.g. link source and Wayback fallback URLs captured by `tn link`.
 - Tags are stored in a normalized (lowercase) many-to-many table; each note can belong to multiple tags and vice versa.
 
 Timestamps are stored in UTC.
