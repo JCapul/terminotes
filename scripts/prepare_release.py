@@ -11,6 +11,8 @@ import sys
 from datetime import date
 from pathlib import Path
 
+import click
+
 try:
     import tomllib
 except ModuleNotFoundError:  # pragma: no cover - fallback for older Python
@@ -56,6 +58,9 @@ def main() -> None:
         print(f"  - {message}")
 
     update_changelog(new_version, commits)
+
+    click.echo("Opening CHANGELOG.md for review...")
+    click.edit(filename=str(CHANGELOG_PATH))
 
     run_command(["git", "add", "--all"], "Staging release files")
     run_command(
