@@ -1,12 +1,13 @@
-"""Front matter rendering and parsing for editor payloads (TOML-based)."""
+"""Front matter rendering and parsing for editor payloads (YAML-based)."""
 
 from __future__ import annotations
 
-import tomllib
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any
 
-FRONTMATTER_DELIM = "+++"
+import yaml
+
+FRONTMATTER_DELIM = "---"
 
 
 @dataclass(slots=True)
@@ -20,11 +21,20 @@ class ParsedEditorNote:
 
 
 def render_document(title: str, body: str, metadata: dict[str, Any]) -> str:
-    payload = _toml_dump(metadata).strip()
+    cleaned_metadata = {
+        key: value for key, value in metadata.items() if value is not None
+    }
+    payload = yaml.safe_dump(
+        cleaned_metadata,
+        sort_keys=False,
+        allow_unicode=True,
+        default_flow_style=False,
+    ).strip()
     body_block = body.rstrip()
+    front_matter = f"{FRONTMATTER_DELIM}\n{payload}\n{FRONTMATTER_DELIM}\n\n"
     if body_block:
-        return f"{FRONTMATTER_DELIM}\n{payload}\n{FRONTMATTER_DELIM}\n\n{body_block}\n"
-    return f"{FRONTMATTER_DELIM}\n{payload}\n{FRONTMATTER_DELIM}\n\n"
+        return f"{front_matter}{body_block}\n"
+    return front_matter
 
 
 def parse_document(raw: str) -> ParsedEditorNote:
@@ -44,7 +54,7 @@ def parse_document(raw: str) -> ParsedEditorNote:
 
     metadata: dict[str, Any] = {}
     try:
-        loaded = tomllib.loads(metadata_block)
+        loaded = yaml.safe_load(metadata_block)
         if isinstance(loaded, dict):
             metadata = loaded
     except Exception:
@@ -63,32 +73,3 @@ def parse_document(raw: str) -> ParsedEditorNote:
     return ParsedEditorNote(
         title=title, body=body, description=description, metadata=metadata
     )
-
-
-def _toml_dump(data: dict[str, Any]) -> str:
-    """Minimal TOML renderer for flat key/value front matter.
-
-    Supports str, numbers, booleans, and lists of strings.
-    """
-
-    def quote(s: str) -> str:
-        return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
-
-    parts: list[str] = []
-    for key, value in data.items():
-        if isinstance(value, str):
-            parts.append(f"{key} = {quote(value)}")
-        elif isinstance(value, bool):
-            parts.append(f"{key} = {'true' if value else 'false'}")
-        elif isinstance(value, (int, float)):
-            parts.append(f"{key} = {value}")
-        elif isinstance(value, Iterable) and not isinstance(value, (str, bytes)):
-            arr = ", ".join(quote(str(v)) for v in value)
-            parts.append(f"{key} = [{arr}]")
-        elif value is None:
-            # Skip Nones
-            continue
-        else:
-            # Fallback to string representation
-            parts.append(f"{key} = {quote(str(value))}")
-    return "\n".join(parts) + "\n"

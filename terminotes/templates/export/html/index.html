@@ -21,7 +21,20 @@
     <main>
       <section>
         <ul id="notes-list" class="notes-list">
-          {{notes_list}}
+          {% if notes %}
+            {% for note in notes %}
+              <li>
+                <a href="{{ note.url }}">
+                  <h2>{{ note.title }}</h2>
+                </a>
+                <p class="note-meta">Updated {{ note.updated }}</p>
+                <p>{{ note.summary }}</p>
+                <p class="note-tags">Tags: {{ note.tags_display }}</p>
+              </li>
+            {% endfor %}
+          {% else %}
+            <li>No notes available.</li>
+          {% endif %}
         </ul>
       </section>
     </main>

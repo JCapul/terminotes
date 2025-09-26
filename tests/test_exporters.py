@@ -60,6 +60,6 @@ def test_markdown_exporter_writes_front_matter(tmp_path) -> None:
     file_path = next(destination.glob("*.md"))
     content = file_path.read_text(encoding="utf-8")
     assert content.startswith("---\nid: 2")
-    assert 'title: "Markdown Note"' in content
-    assert 'tags:\n  - "personal"' in content
+    assert "title: Markdown Note" in content
+    assert "tags:\n- personal\n- ideas" in content
     assert content.strip().endswith("Line 2")

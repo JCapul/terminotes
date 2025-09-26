@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 import sqlite3
-import tomllib
 from datetime import datetime
 from pathlib import Path
 
+import yaml
 from click.testing import CliRunner
 from terminotes import cli
 from terminotes import config as config_module
 from terminotes.git_sync import GitSync
+from terminotes.notes_frontmatter import FRONTMATTER_DELIM
 from terminotes.storage import DB_FILENAME, Storage
 
 
@@ -51,6 +52,16 @@ def _read_single_note_timestamps(db_path: Path) -> tuple[datetime, datetime]:
     return datetime.fromisoformat(row[0]), datetime.fromisoformat(row[1])
 
 
+def _load_metadata_from_template(template: str) -> dict[str, object]:
+    prefix = f"{FRONTMATTER_DELIM}\n"
+    suffix = f"\n{FRONTMATTER_DELIM}"
+    _, remainder = template.split(prefix, 1)
+    block, _ = remainder.split(suffix, 1)
+    data = yaml.safe_load(block) or {}
+    assert isinstance(data, dict)
+    return data
+
+
 def test_new_command_creates_note_with_metadata(tmp_path, monkeypatch) -> None:
     config_path = _write_config(tmp_path)
     repo_dir = tmp_path / "notes-repo"
@@ -62,12 +73,14 @@ def test_new_command_creates_note_with_metadata(tmp_path, monkeypatch) -> None:
     def fake_editor(template: str, editor: str | None = None) -> str:
         captured_template["value"] = template
         return (
-            "+++\n"
-            'title = "Captured Title"\n'
-            'date = "2024-01-01T12:00:00+00:00"\n'
-            'last_edited = "2024-01-01T12:00:00+00:00"\n'
-            'tags = ["Work", "Focus"]\n'
-            "+++\n\n"
+            f"{FRONTMATTER_DELIM}\n"
+            "title: Captured Title\n"
+            'date: "2024-01-01T12:00:00+00:00"\n'
+            'last_edited: "2024-01-01T12:00:00+00:00"\n'
+            "tags:\n"
+            "  - Work\n"
+            "  - Focus\n"
+            f"{FRONTMATTER_DELIM}\n\n"
             "Body from editor. #til #python\n"
         )
 
@@ -79,8 +92,7 @@ def test_new_command_creates_note_with_metadata(tmp_path, monkeypatch) -> None:
     assert result.exit_code == 0, result.output
 
     template = captured_template["value"]
-    metadata_block = template.split("+++\n", 2)[1].split("\n+++", 1)[0]
-    metadata = tomllib.loads(metadata_block)
+    metadata = _load_metadata_from_template(template)
     assert "date" in metadata
     assert "last_edited" in metadata
     assert metadata.get("tags") == []
@@ -106,11 +118,11 @@ def test_new_command_respects_custom_timestamps(tmp_path, monkeypatch) -> None:
 
     def fake_editor(template: str, editor: str | None = None) -> str:
         return (
-            "+++\n"
-            'title = "Has Timestamps"\n'
-            f'date = "{created}"\n'
-            f'last_edited = "{updated}"\n'
-            "+++\n\n"
+            f"{FRONTMATTER_DELIM}\n"
+            "title: Has Timestamps\n"
+            f'date: "{created}"\n'
+            f'last_edited: "{updated}"\n'
+            f"{FRONTMATTER_DELIM}\n\n"
             "Body.\n"
         )
 
@@ -140,12 +152,14 @@ def test_edit_command_updates_note_and_metadata(tmp_path, monkeypatch) -> None:
     def fake_editor(template: str, editor: str | None = None) -> str:
         captured_template["value"] = template
         return (
-            "+++\n"
-            'title = "Updated Title"\n'
-            f'date = "{note.created_at.isoformat()}"\n'
-            f'last_edited = "{datetime.now().isoformat()}"\n'
-            'tags = ["Updated", "Focus"]\n'
-            "+++\n\n"
+            f"{FRONTMATTER_DELIM}\n"
+            "title: Updated Title\n"
+            f'date: "{note.created_at.isoformat()}"\n'
+            f'last_edited: "{datetime.now().isoformat()}"\n'
+            "tags:\n"
+            "  - Updated\n"
+            "  - Focus\n"
+            f"{FRONTMATTER_DELIM}\n\n"
             "Updated body. #python\n"
         )
 
@@ -157,8 +171,7 @@ def test_edit_command_updates_note_and_metadata(tmp_path, monkeypatch) -> None:
     assert result.exit_code == 0, result.output
 
     template = captured_template["value"]
-    metadata_block = template.split("+++\n", 2)[1].split("\n+++", 1)[0]
-    metadata = tomllib.loads(metadata_block)
+    metadata = _load_metadata_from_template(template)
     assert metadata["title"] == "Existing Title"
     assert "last_edited" in metadata
     assert metadata.get("tags") == ["initial"]
@@ -186,11 +199,11 @@ def test_edit_command_allows_changing_timestamps(tmp_path, monkeypatch) -> None:
 
     def fake_editor(template: str, editor: str | None = None) -> str:
         return (
-            "+++\n"
-            'title = "Title"\n'
-            f'date = "{new_created}"\n'
-            f'last_edited = "{new_updated}"\n'
-            "+++\n\n"
+            f"{FRONTMATTER_DELIM}\n"
+            "title: Title\n"
+            f'date: "{new_created}"\n'
+            f'last_edited: "{new_updated}"\n'
+            f"{FRONTMATTER_DELIM}\n\n"
             "Body updated. #til\n"
         )
 
@@ -230,11 +243,11 @@ def test_edit_with_last_option_edits_last_updated(tmp_path, monkeypatch) -> None
     def fake_editor(template: str, editor: str | None = None) -> str:
         captured_template["value"] = template
         return (
-            "+++\n"
-            'title = "First title updated"\n'
-            f'date = "{first.created_at.isoformat()}"\n'
-            f'last_edited = "{datetime.now().isoformat()}"\n'
-            "+++\n\n"
+            f"{FRONTMATTER_DELIM}\n"
+            "title: First title updated\n"
+            f'date: "{first.created_at.isoformat()}"\n'
+            f'last_edited: "{datetime.now().isoformat()}"\n'
+            f"{FRONTMATTER_DELIM}\n\n"
             "First body updated via edit. #python\n"
         )
 
@@ -246,8 +259,7 @@ def test_edit_with_last_option_edits_last_updated(tmp_path, monkeypatch) -> None
     assert result.exit_code == 0, result.output
 
     template = captured_template["value"]
-    metadata_block = template.split("+++\n", 2)[1].split("\n+++", 1)[0]
-    metadata = tomllib.loads(metadata_block)
+    metadata = _load_metadata_from_template(template)
     assert metadata["title"] == "First title"
 
     conn = sqlite3.connect(repo_dir / DB_FILENAME)

@@ -10,6 +10,10 @@ from html import escape
 from pathlib import Path
 from typing import Iterable
 
+import yaml
+from jinja2 import Environment, FileSystemLoader, TemplateNotFound, select_autoescape
+from markupsafe import Markup
+
 from .storage import NoteSnapshot
 
 
@@ -23,15 +27,15 @@ class ExportOptions:
     site_title: str = "Terminotes"
 
 
-def _render_body_html(body: str) -> str:
+def _render_body_html(body: str) -> Markup:
     paragraphs = [segment.strip() for segment in body.split("\n\n") if segment.strip()]
     if not paragraphs:
-        return "<p>(No content)</p>"
+        return Markup("<p>(No content)</p>")
     html_parts: list[str] = []
     for para in paragraphs:
         escaped = escape(para).replace("\n", "<br />")
         html_parts.append(f"<p>{escaped}</p>")
-    return "\n".join(html_parts)
+    return Markup("\n".join(html_parts))
 
 
 def _slugify(value: str) -> str:
@@ -49,15 +53,27 @@ class HtmlExporter:
     def __init__(self, templates_dir: Path, *, site_title: str = "Terminotes") -> None:
         self.templates_dir = templates_dir
         self.site_title = site_title
+        self._env = Environment(
+            loader=FileSystemLoader(str(templates_dir)),
+            autoescape=select_autoescape(["html", "xml"]),
+            trim_blocks=True,
+            lstrip_blocks=True,
+        )
 
     def export(self, notes: Iterable[NoteSnapshot], destination: Path) -> int:
         dest = destination
         dest.mkdir(parents=True, exist_ok=True)
 
-        index_template = self._read_template("index.html")
-        note_template = self._read_template("note.html")
-        styles_template = self._read_template("styles.css")
-        search_js_template = self._read_template("search.js")
+        try:
+            index_template = self._env.get_template("index.html")
+            note_template = self._env.get_template("note.html")
+        except TemplateNotFound as exc:  # pragma: no cover - template existence tested
+            raise ExportError(
+                f"Template '{exc.name}' not found in {self.templates_dir}"
+            ) from exc
+
+        styles_template = self._read_asset("styles.css")
+        search_js_template = self._read_asset("search.js")
 
         (dest / "styles.css").write_text(styles_template, encoding="utf-8")
         (dest / "search.js").write_text(search_js_template, encoding="utf-8")
@@ -65,7 +81,7 @@ class HtmlExporter:
         notes_dir = dest / "notes"
         notes_dir.mkdir(exist_ok=True)
 
-        notes_list_markup: list[str] = []
+        notes_listing: list[dict[str, object]] = []
         notes_data: list[dict[str, object]] = []
 
         count = 0
@@ -83,14 +99,14 @@ class HtmlExporter:
             created_pretty = note.created_at.isoformat(" ", "seconds")
             updated_pretty = note.updated_at.isoformat(" ", "seconds")
 
-            note_markup = (
-                note_template.replace("{{title}}", escape(note_title))
-                .replace("{{created_at}}", created_pretty)
-                .replace("{{created_at_iso}}", note.created_at.isoformat())
-                .replace("{{updated_at}}", updated_pretty)
-                .replace("{{updated_at_iso}}", note.updated_at.isoformat())
-                .replace("{{tags}}", escape(tags_display))
-                .replace("{{body_html}}", body_html)
+            note_markup = note_template.render(
+                title=note_title,
+                created_at=created_pretty,
+                created_at_iso=note.created_at.isoformat(),
+                updated_at=updated_pretty,
+                updated_at_iso=note.updated_at.isoformat(),
+                tags=tags_display,
+                body_html=body_html,
             )
             note_path.write_text(note_markup, encoding="utf-8")
 
@@ -99,23 +115,15 @@ class HtmlExporter:
             summary_text = summary[0] if summary else ""
             summary_text = summary_text[:200] + ("…" if len(summary_text) > 200 else "")
 
-            note_summary = escape(summary_text) or "(No summary)"
-            note_link = escape(note_title)
-            notes_list_markup.append(
-                """
-                <li>
-                  <a href="{url}"><h2>{title}</h2></a>
-                  <p class="note-meta">Updated {updated}</p>
-                  <p>{summary}</p>
-                  <p class="note-tags">Tags: {tags}</p>
-                </li>
-                """.format(
-                    url=url,
-                    title=note_link,
-                    updated=updated_pretty,
-                    summary=note_summary,
-                    tags=escape(tags_display),
-                )
+            summary_display = summary_text or "(No summary)"
+            notes_listing.append(
+                {
+                    "title": note_title or "Untitled note",
+                    "url": url,
+                    "updated": updated_pretty,
+                    "tags_display": tags_display,
+                    "summary": summary_display,
+                }
             )
 
             notes_data.append(
@@ -136,18 +144,17 @@ class HtmlExporter:
         notes_json_path.write_text(json.dumps(notes_data, indent=2), encoding="utf-8")
 
         generated_stamp = datetime.now(UTC).strftime("%Y-%m-%d %H:%M:%S UTC")
-        notes_markup = "\n".join(notes_list_markup) or "<li>No notes available.</li>"
-        rendered_index = (
-            index_template.replace("{{site_title}}", escape(self.site_title))
-            .replace("{{notes_count}}", str(count))
-            .replace("{{generated_at}}", generated_stamp)
-            .replace("{{notes_list}}", notes_markup)
+        rendered_index = index_template.render(
+            site_title=self.site_title,
+            notes_count=count,
+            generated_at=generated_stamp,
+            notes=notes_listing,
         )
         (dest / "index.html").write_text(rendered_index, encoding="utf-8")
 
         return count
 
-    def _read_template(self, name: str) -> str:
+    def _read_asset(self, name: str) -> str:
         template_path = self.templates_dir / name
         if not template_path.exists():
             raise ExportError(f"Template '{name}' not found in {self.templates_dir}")
@@ -168,26 +175,25 @@ class MarkdownExporter:
             filename = f"{note.id:04d}-{slug}.md"
             file_path = dest / filename
 
-            front_matter_lines = ["---"]
-            front_matter_lines.append(f"id: {note.id}")
-            front_matter_lines.append(f"title: {_yaml_quote(note.title)}")
-            front_matter_lines.append(f"description: {_yaml_quote(note.description)}")
-            front_matter_lines.append(f"date: {note.created_at.isoformat()}")
-            front_matter_lines.append(f"last_edited: {note.updated_at.isoformat()}")
-            can_publish_value = "true" if note.can_publish else "false"
-            front_matter_lines.append(f"can_publish: {can_publish_value}")
-            front_matter_lines.append("tags:")
-            for tag in note.tags:
-                front_matter_lines.append(f"  - {_yaml_quote(tag)}")
-            front_matter_lines.append("---\n")
+            metadata = {
+                "id": note.id,
+                "title": note.title or "",
+                "description": note.description or "",
+                "date": note.created_at.isoformat(),
+                "last_edited": note.updated_at.isoformat(),
+                "can_publish": bool(note.can_publish),
+                "tags": note.tags,
+            }
 
-            body = note.body.rstrip() + "\n"
-            file_path.write_text("\n".join(front_matter_lines) + body, encoding="utf-8")
+            yaml_text = yaml.safe_dump(
+                metadata,
+                sort_keys=False,
+                allow_unicode=True,
+                default_flow_style=False,
+            ).strip()
+
+            front_matter = f"---\n{yaml_text}\n---\n\n"
+            body = (note.body or "").rstrip() + "\n"
+            file_path.write_text(front_matter + body, encoding="utf-8")
 
         return count
-
-
-def _yaml_quote(value: str) -> str:
-    if value == "":
-        return '""'
-    return json.dumps(value)
