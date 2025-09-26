@@ -13,7 +13,7 @@ def open_editor(initial_content: str = "", editor: str | None = None) -> str:
     """Launch the configured editor using Click and return captured content."""
 
     try:
-        content = click.edit(text=initial_content, editor=editor)
+        content = click.edit(text=initial_content, editor=editor, extension=".md")
     except OSError as exc:  # pragma: no cover - depends on system configuration
         raise EditorError(f"Failed to launch editor '{editor or ''}': {exc}") from exc
 

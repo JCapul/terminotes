@@ -49,7 +49,7 @@ def test_log_derives_title_from_first_sentence(tmp_path: Path, monkeypatch) -> N
 
     runner = CliRunner()
     body = "Hello world! Second sentence with more details and #tags. And more."
-    result = runner.invoke(cli.cli, ["log", "--message", body])
+    result = runner.invoke(cli.cli, ["log", "--", body])
     assert result.exit_code == 0, result.output
 
     title, stored_body = _read_single_note(repo_dir / DB_FILENAME)
@@ -85,15 +85,7 @@ def test_log_accepts_explicit_tags(tmp_path: Path, monkeypatch) -> None:
     runner = CliRunner()
     result = runner.invoke(
         cli.cli,
-        [
-            "log",
-            "--message",
-            "Tagged entry",
-            "--tag",
-            "Work",
-            "--tag",
-            "personal",
-        ],
+        ["log", "--tag", "Work", "--tag", "personal", "--", "Tagged entry"],
     )
 
     assert result.exit_code == 0, result.output
@@ -101,7 +93,7 @@ def test_log_accepts_explicit_tags(tmp_path: Path, monkeypatch) -> None:
     storage = Storage(repo_dir / DB_FILENAME)
     storage.initialize()
     note = storage.fetch_note(1)
-    assert sorted(tag.name for tag in note.tags) == ["personal", "work"]
+    assert sorted(tag.name for tag in note.tags) == ["log", "personal", "work"]
 
 
 def test_log_with_message_option_handles_hashtags(tmp_path: Path, monkeypatch) -> None:
@@ -112,7 +104,7 @@ def test_log_with_message_option_handles_hashtags(tmp_path: Path, monkeypatch) -
 
     runner = CliRunner()
     msg = "Crazy stuff happening in #python"
-    result = runner.invoke(cli.cli, ["log", "--message", msg])
+    result = runner.invoke(cli.cli, ["log", "--", msg])
 
     assert result.exit_code == 0, result.output
 
@@ -130,4 +122,4 @@ def test_log_requires_body(tmp_path: Path, monkeypatch) -> None:
     result = runner.invoke(cli.cli, ["log"])  # no content
 
     assert result.exit_code == 1
-    assert "Body is required" in result.output
+    assert "Content is required" in result.output

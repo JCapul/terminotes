@@ -123,14 +123,6 @@ def edit(ctx: click.Context, note_id: int | None, edit_last: bool) -> None:
 
 @cli.command(name="log")
 @click.option(
-    "-m",
-    "--message",
-    "message_opt",
-    type=str,
-    default=None,
-    help=("Log message text. Prefer this when using hashtags to avoid shell comments."),
-)
-@click.option(
     "-t",
     "--tag",
     "tags",
@@ -141,7 +133,6 @@ def edit(ctx: click.Context, note_id: int | None, edit_last: bool) -> None:
 @click.pass_context
 def log(
     ctx: click.Context,
-    message_opt: str | None,
     content: tuple[str, ...],
     tags: tuple[str, ...],
 ) -> None:
@@ -152,21 +143,18 @@ def log(
 
     app: AppContext = ctx.obj["app"]
 
-    # Prefer explicit --message to avoid shell treating '#' as comments.
-    if message_opt is not None and content:
-        raise TerminotesCliError(
-            "Use either --message or positional content, not both."
-        )
-    body = (message_opt if message_opt is not None else " ".join(content)).strip()
+    body = " ".join(content).strip()
     if not body:
-        raise TerminotesCliError("Body is required for 'tn log'.")
+        raise TerminotesCliError("Content is required for 'tn log'.")
+
+    tags = ("log",) + tags
 
     try:
         note = create_log_entry(app, body, tags=tags)
     except (StorageError, GitSyncError) as exc:  # pragma: no cover - pass-through
         raise TerminotesCliError(str(exc)) from exc
 
-    click.echo(f"Created note {note.id}")
+    click.echo(f"Created note {note.id} (tagged as log)")
 
 
 @cli.command(name="delete")
