@@ -1,6 +1,6 @@
 [project]
 name = "terminotes"
-version = "0.4.0"
+version = "0.4.1"
 description = "Terminal-first notes CLI with SQLite storage and git sync."
 authors = [
   { name="Julien Capul", email="julien.capul@pm.me" },

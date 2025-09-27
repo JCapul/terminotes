@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.1 - 2025-09-27
+
+- fix(editor): refresh last edited and expose extra data (e.g. links)
+- feat(datetime): show timestamps in local timezone
+
 ## 0.4.0 - 2025-09-27
 
 - feat(cli): introduce `tn link` command to save URLs with Wayback fallback integration
