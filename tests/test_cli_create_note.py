@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from datetime import datetime
 from pathlib import Path
@@ -11,7 +12,11 @@ from click.testing import CliRunner
 from terminotes import cli
 from terminotes import config as config_module
 from terminotes.git_sync import GitSync
-from terminotes.notes_frontmatter import FRONTMATTER_DELIM
+from terminotes.notes_frontmatter import (
+    FRONTMATTER_DELIM,
+    parse_document,
+    render_document,
+)
 from terminotes.storage import DB_FILENAME, Storage
 
 
@@ -145,12 +150,21 @@ def test_edit_command_updates_note_and_metadata(tmp_path, monkeypatch) -> None:
 
     storage = Storage(repo_dir / DB_FILENAME)
     storage.initialize()
-    note = storage.create_note("Existing Title", "Body", tags=["initial"])
+    extra_payload = {
+        "link": {
+            "source_url": "https://example.com",
+            "wayback": "https://web.archive.org/example",
+        }
+    }
+    note = storage.create_note(
+        "Existing Title", "Body", tags=["initial"], extra_data=extra_payload
+    )
 
     captured_template: dict[str, str] = {}
 
     def fake_editor(template: str, editor: str | None = None) -> str:
         captured_template["value"] = template
+        updated_wayback = "https://web.archive.org/example-updated"
         return (
             f"{FRONTMATTER_DELIM}\n"
             "title: Updated Title\n"
@@ -159,6 +173,10 @@ def test_edit_command_updates_note_and_metadata(tmp_path, monkeypatch) -> None:
             "tags:\n"
             "  - Updated\n"
             "  - Focus\n"
+            "extra_data:\n"
+            "  link:\n"
+            "    source_url: https://example.com\n"
+            f"    wayback: {updated_wayback}\n"
             f"{FRONTMATTER_DELIM}\n\n"
             "Updated body. #python\n"
         )
@@ -175,6 +193,7 @@ def test_edit_command_updates_note_and_metadata(tmp_path, monkeypatch) -> None:
     assert metadata["title"] == "Existing Title"
     assert "last_edited" in metadata
     assert metadata.get("tags") == ["initial"]
+    assert metadata.get("extra_data") == extra_payload
 
     title, body = _read_single_note(repo_dir / DB_FILENAME)
     assert title == "Updated Title"
@@ -182,6 +201,45 @@ def test_edit_command_updates_note_and_metadata(tmp_path, monkeypatch) -> None:
 
     updated_note = storage.fetch_note(note.id)
     assert sorted(tag.name for tag in updated_note.tags) == ["focus", "updated"]
+    assert updated_note.extra_data is not None
+    assert json.loads(updated_note.extra_data) == {
+        "link": {
+            "source_url": "https://example.com",
+            "wayback": "https://web.archive.org/example-updated",
+        }
+    }
+
+
+def test_edit_command_auto_updates_last_edited_when_metadata_unchanged(
+    tmp_path, monkeypatch
+) -> None:
+    config_path = _write_config(tmp_path)
+    repo_dir = tmp_path / "notes-repo"
+    _set_default_paths(config_path, monkeypatch)
+    monkeypatch.setattr(GitSync, "ensure_local_clone", lambda self: None)
+
+    storage = Storage(repo_dir / DB_FILENAME)
+    storage.initialize()
+    note = storage.create_note("Title", "Body")
+    original_updated_at = note.updated_at
+
+    def fake_editor(template: str, editor: str | None = None) -> str:
+        parsed = parse_document(template)
+        return render_document(
+            title=parsed.title or "",
+            body="Updated body without touching metadata.",
+            metadata=parsed.metadata,
+        )
+
+    monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
+
+    runner = CliRunner()
+    result = runner.invoke(cli.cli, ["edit", "--id", str(note.id)])
+    assert result.exit_code == 0, result.output
+
+    updated_note = storage.fetch_note(note.id)
+    assert updated_note.body == "Updated body without touching metadata."
+    assert updated_note.updated_at > original_updated_at
 
 
 def test_edit_command_allows_changing_timestamps(tmp_path, monkeypatch) -> None:

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime, timezone
 from html.parser import HTMLParser
-from typing import Callable, Iterable
+from typing import Any, Callable, Iterable
 from urllib.parse import urlparse
 
 import httpx
@@ -227,6 +228,7 @@ def create_via_editor(
 
     can_publish_flag = _extract_can_publish(parsed.metadata, default=False)
     note_tags = _extract_tags(parsed.metadata)
+    has_extra_data, extra_data_payload = _extract_extra_data(parsed.metadata, warn=warn)
 
     created_at_dt = _parse_optional_dt(
         parsed.metadata.get("date"), field="date", warn=warn
@@ -234,6 +236,10 @@ def create_via_editor(
     updated_at_dt = _parse_optional_dt(
         parsed.metadata.get("last_edited"), field="last_edited", warn=warn
     )
+
+    create_kwargs: dict[str, Any] = {}
+    if has_extra_data:
+        create_kwargs["extra_data"] = extra_data_payload
 
     note = ctx.storage.create_note(
         parsed.title or "",
@@ -243,6 +249,7 @@ def create_via_editor(
         updated_at=updated_at_dt,
         can_publish=can_publish_flag,
         tags=note_tags,
+        **create_kwargs,
     )
     # Commit the DB update locally (no network interaction).
     ctx.git_sync.commit_db_update(ctx.storage.path, f"chore(db): create note {note.id}")
@@ -280,23 +287,41 @@ def update_via_editor(
         "tags": sorted(tag.name for tag in existing.tags),
     }
 
+    original_last_edited_value = meta["last_edited"]
+
+    decoded_extra = _decode_extra_data(existing.extra_data)
+    if decoded_extra is not None:
+        meta["extra_data"] = decoded_extra
+
     template = render_document(
         title=str(meta["title"]), body=existing.body, metadata=meta
     )  # type: ignore[arg-type]
     raw = ef(template, editor=ctx.config.editor)
     parsed = parse_document(raw)
 
+    raw_last_edited_value = parsed.metadata.get("last_edited")
+
     created_at_dt = _parse_optional_dt(
         parsed.metadata.get("date"), field="date", warn=warn
     )
     updated_at_dt = _parse_optional_dt(
-        parsed.metadata.get("last_edited"), field="last_edited", warn=warn
+        raw_last_edited_value, field="last_edited", warn=warn
     )
+
+    if _should_auto_update_last_edited(
+        original_last_edited_value, raw_last_edited_value, updated_at_dt
+    ):
+        updated_at_dt = None
 
     new_can_publish = _extract_can_publish(
         parsed.metadata, default=existing.can_publish
     )
     new_tags = _extract_tags(parsed.metadata)
+    has_extra_data, extra_data_payload = _extract_extra_data(parsed.metadata, warn=warn)
+
+    update_kwargs: dict[str, Any] = {}
+    if has_extra_data:
+        update_kwargs["extra_data"] = extra_data_payload
 
     updated = ctx.storage.update_note(
         target_id,
@@ -307,6 +332,7 @@ def update_via_editor(
         updated_at=updated_at_dt,
         can_publish=new_can_publish,
         tags=new_tags,
+        **update_kwargs,
     )
     # Commit the DB update locally (no network interaction).
     ctx.git_sync.commit_db_update(
@@ -358,3 +384,64 @@ def _extract_tags(metadata: dict[str, object]) -> list[str]:
             tags.append(name)
         return tags
     return []
+
+
+def _decode_extra_data(raw: object) -> dict[str, Any] | None:
+    if raw is None:
+        return None
+    if isinstance(raw, str):
+        try:
+            loaded = json.loads(raw)
+        except json.JSONDecodeError:
+            return None
+        return loaded if isinstance(loaded, dict) else None
+    if isinstance(raw, dict):
+        return raw
+    return None
+
+
+def _extract_extra_data(
+    metadata: dict[str, object], *, warn: WarnFunc | None
+) -> tuple[bool, dict[str, Any] | None]:
+    if "extra_data" not in metadata:
+        return False, None
+    value = metadata["extra_data"]
+    if value is None:
+        return True, None
+    if isinstance(value, dict):
+        return True, value
+    if warn is not None:
+        warn("Warning: Ignoring invalid 'extra_data' metadata; expected a mapping.")
+    return False, None
+
+
+def _should_auto_update_last_edited(
+    original_value: object,
+    candidate_value: object,
+    parsed_candidate: datetime | None,
+) -> bool:
+    if candidate_value is None:
+        return True
+    if isinstance(candidate_value, str) and not candidate_value.strip():
+        return True
+    if parsed_candidate is None:
+        return True
+    original_dt = _coerce_metadata_datetime(original_value)
+    if original_dt is not None and parsed_candidate == original_dt:
+        return True
+    return False
+
+
+def _coerce_metadata_datetime(value: object) -> datetime | None:
+    if isinstance(value, datetime):
+        dt = value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        try:
+            return parse_user_datetime(text)
+        except Exception:
+            return None
+    return None
