@@ -11,7 +11,7 @@ It focuses on fast capture from the shell, durable storage in SQLite, and simple
 - SQLite storage with simple schema and safe parameterized queries.
 - Git-backed portability: store the DB in a repo and sync on demand.
 - Practical commands: list, search, delete, info, sync, and export.
-- Link capture with `tn link`, optionally tagging notes and storing Wayback fallbacks.
+- Link capture with `tn link`, including optional comments, auto-applied `link` tags, and Wayback fallbacks.
 
 ## Requirements
 
@@ -83,7 +83,9 @@ Below are the primary subcommands. Use `tn --help` and `tn <cmd> --help` for det
   - Repeat `--tag` to associate tags; tag names are normalized to lowercase.
 - `link` — Save a URL with optional comment and Wayback fallback metadata.
   - Example: `tn link https://example.com "Great article" --tag reading`
-  - Automatically adds the `link` tag and stores the latest archived snapshot (when available) under the note's extra data.
+  - Multi-word comments become the first paragraph of the note body, followed by the Markdown link (and Wayback fallback when present).
+  - Automatically adds the `link` tag alongside any additional `--tag` arguments and stores the latest archived snapshot (when available) under the note's extra data.
+  - Fetches the page title and appends the hostname when possible; otherwise the raw URL becomes the note title. A warning is shown if no Wayback snapshot is available.
 
 - `ls` — List most recent notes (by last edit time).
   - Example: `tn ls --limit 10 --tag work`
