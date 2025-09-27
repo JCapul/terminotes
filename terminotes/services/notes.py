@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import re
 from datetime import datetime, timezone
+from html.parser import HTMLParser
 from typing import Callable, Iterable
 from urllib.parse import urlparse
+
+import httpx
 
 from ..app import AppContext
 from ..editor import open_editor as default_open_editor
@@ -52,7 +55,62 @@ def _derive_title_from_body(body: str, *, max_len: int = MAX_TITLE_CHARS) -> str
     return candidate[: max_len - 1].rstrip() + "\u2026"
 
 
-def _title_from_url(url: str, *, max_len: int = MAX_TITLE_CHARS) -> str:
+class _TitleParser(HTMLParser):
+    """HTML parser that captures the first <title> element."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._record = False
+        self.title: str | None = None
+
+    def handle_starttag(self, tag: str, attrs) -> None:  # type: ignore[override]
+        if tag.lower() == "title" and self.title is None:
+            self._record = True
+
+    def handle_endtag(self, tag: str) -> None:  # type: ignore[override]
+        if tag.lower() == "title":
+            self._record = False
+
+    def handle_data(self, data: str) -> None:  # type: ignore[override]
+        if self._record and self.title is None:
+            candidate = data.strip()
+            if candidate:
+                self.title = candidate
+
+
+def get_page_title(url: str, *, timeout: float = 5.0) -> str | None:
+    """Fetch the page for ``url`` and return the first <title> string."""
+
+    target = url.strip()
+    if not target:
+        return None
+
+    try:
+        response = httpx.get(
+            target,
+            timeout=timeout,
+            follow_redirects=True,
+            headers={
+                "User-Agent": "terminotes-link-preview/0.1 (+https://github.com/jcapul/terminotes)",
+            },
+        )
+        response.raise_for_status()
+    except httpx.HTTPError:
+        return None
+
+    content_type = response.headers.get("content-type", "").lower()
+    if "html" not in content_type:
+        return None
+
+    parser = _TitleParser()
+    try:
+        parser.feed(response.text)
+    except Exception:  # pragma: no cover - defensive against malformed HTML
+        return None
+    return parser.title
+
+
+def _hostname_from_url(url: str, *, max_len: int = MAX_TITLE_CHARS) -> str:
     parsed = urlparse(url)
     host = parsed.netloc or url
     if len(host) <= max_len:
@@ -103,10 +161,12 @@ def create_link_entry(
     if snapshot is None and warn is not None:
         warn("No Wayback snapshot found for the provided URL.")
 
+    wayback_url = snapshot["url"] if snapshot else None
+
     extra_data = {
         "link": {
             "source_url": source_url,
-            "wayback": snapshot,
+            "wayback": wayback_url,
         }
     }
 
@@ -114,25 +174,25 @@ def create_link_entry(
     if comment_text:
         body_lines.append(comment_text)
         body_lines.append("")
-    body_lines.append(source_url)
-    if snapshot is not None:
+    body_lines.append(f"[{source_url}]({source_url})")
+    if wayback_url is not None:
         body_lines.append("")
-        body_lines.append(f"Wayback fallback: {snapshot['url']}")
-        timestamp = snapshot.get("timestamp")
-        if timestamp:
-            body_lines.append(f"Snapshot captured: {timestamp}")
+        body_lines.append(f"Wayback fallback: [{wayback_url}]({wayback_url})")
 
     body = "\n".join(body_lines)
 
-    title = comment_text or _title_from_url(source_url)
-    description = comment_text
+    page_title = get_page_title(source_url)
+    title = page_title or _derive_title_from_body(comment_text)
+    if title:
+        title = title + f" ({_hostname_from_url(source_url)})"
+    else:
+        title = source_url
 
     link_tags = ["link"] + list(tags or [])
 
     note = ctx.storage.create_note(
         title=title,
         body=body,
-        description=description,
         can_publish=False,
         tags=link_tags,
         extra_data=extra_data,

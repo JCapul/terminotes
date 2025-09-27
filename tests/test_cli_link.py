@@ -47,6 +47,10 @@ def test_link_command_stores_snapshot(tmp_path, monkeypatch) -> None:
         "terminotes.services.notes.fetch_latest_snapshot",
         lambda _url: snapshot,
     )
+    monkeypatch.setattr(
+        "terminotes.services.notes.get_page_title",
+        lambda _url: "Example Title",
+    )
 
     runner = CliRunner()
     result = runner.invoke(
@@ -60,8 +64,8 @@ def test_link_command_stores_snapshot(tmp_path, monkeypatch) -> None:
     storage = Storage(repo_dir / DB_FILENAME)
     storage.initialize()
     saved = storage.fetch_note(1)
-    assert saved.title == "Interesting article"
-    assert json.loads(saved.extra_data)["link"]["wayback"] == snapshot
+    assert saved.title == "Example Title (example.com)"
+    assert json.loads(saved.extra_data)["link"]["wayback"] == snapshot["url"]
     assert sorted(tag.name for tag in saved.tags) == ["link"]
 
 
@@ -79,6 +83,10 @@ def test_link_command_handles_missing_snapshot(tmp_path, monkeypatch) -> None:
         "terminotes.services.notes.fetch_latest_snapshot",
         lambda _url: None,
     )
+    monkeypatch.setattr(
+        "terminotes.services.notes.get_page_title",
+        lambda _url: None,
+    )
 
     runner = CliRunner()
     result = runner.invoke(cli.cli, ["link", "https://example.com"])
@@ -89,8 +97,38 @@ def test_link_command_handles_missing_snapshot(tmp_path, monkeypatch) -> None:
     storage = Storage(repo_dir / DB_FILENAME)
     storage.initialize()
     saved = storage.fetch_note(1)
-    assert saved.title == "example.com"
+    assert saved.title == "https://example.com"
     extra = saved.extra_data
     assert extra is not None
     data = json.loads(extra)
     assert data["link"]["wayback"] is None
+
+
+def test_link_command_uses_page_title(tmp_path, monkeypatch) -> None:
+    config_path = _write_config(tmp_path)
+    repo_dir = tmp_path / "notes-repo"
+
+    _set_default_paths(config_path, monkeypatch)
+    monkeypatch.setattr(GitSync, "ensure_local_clone", lambda self: None)
+    monkeypatch.setattr(
+        GitSync, "commit_db_update", lambda self, path, message=None: None
+    )
+
+    monkeypatch.setattr(
+        "terminotes.services.notes.fetch_latest_snapshot",
+        lambda _url: None,
+    )
+    monkeypatch.setattr(
+        "terminotes.services.notes.get_page_title",
+        lambda _url: "Example Title",
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(cli.cli, ["link", "https://example.com"])
+
+    assert result.exit_code == 0, result.output
+
+    storage = Storage(repo_dir / DB_FILENAME)
+    storage.initialize()
+    saved = storage.fetch_note(1)
+    assert saved.title == "Example Title (example.com)"
