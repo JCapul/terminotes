@@ -1,11 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 - 2025-09-27
 
-- feat(storage): add `extra_data` JSON column for notes to capture structured metadata
-- feat(cli): introduce `tn link` command with Wayback fallback integration
-- feat(utils): add Internet Archive helper built on httpx
-- feat(export): include note `extra_data` in markdown front matter and HTML JSON output
+- feat(cli): introduce `tn link` command to save URLs with Wayback fallback integration
+- feat(export): switch to yaml front matter and jinja templates
 
 ## 0.3.0 - 2025-09-26
 
