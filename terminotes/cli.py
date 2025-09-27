@@ -27,7 +27,7 @@ from .services.notes import (
     update_via_editor,
 )
 from .storage import Storage, StorageError
-from .utils.datetime_fmt import to_user_friendly_utc
+from .utils.datetime_fmt import to_user_friendly_local
 
 
 class TerminotesCliError(click.ClickException):
@@ -367,7 +367,7 @@ def ls(ctx: click.Context, limit: int, reverse: bool, tags: tuple[str, ...]) -> 
         notes = list(reversed(notes))
 
     for n in notes:
-        updated = to_user_friendly_utc(n.updated_at)
+        updated = to_user_friendly_local(n.updated_at)
         title = n.title or ""
         tag_list = sorted(tag.name for tag in n.tags)
         tag_suffix = f"  [tags: {', '.join(tag_list)}]" if tag_list else ""
@@ -423,7 +423,7 @@ def search(
         matches = []
 
     for n in matches:
-        updated = to_user_friendly_utc(n.updated_at)
+        updated = to_user_friendly_local(n.updated_at)
         title = n.title or ""
         tag_list = sorted(tag.name for tag in n.tags)
         tag_suffix = f"  [tags: {', '.join(tag_list)}]" if tag_list else ""

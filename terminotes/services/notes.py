@@ -15,9 +15,9 @@ from ..editor import open_editor as default_open_editor
 from ..notes_frontmatter import parse_document, render_document
 from ..storage import Note
 from ..utils.datetime_fmt import (
-    now_user_friendly_utc,
+    now_user_friendly_local,
     parse_user_datetime,
-    to_user_friendly_utc,
+    to_user_friendly_local,
 )
 from ..utils.wayback import fetch_latest_snapshot
 
@@ -211,7 +211,7 @@ def create_via_editor(
 
     ef = edit_fn or default_open_editor
 
-    timestamp = now_user_friendly_utc()
+    timestamp = now_user_friendly_local()
     metadata = {
         "title": "",
         "description": "",
@@ -274,8 +274,8 @@ def update_via_editor(
     meta: dict[str, object] = {
         "title": existing.title or "",
         "description": existing.description,
-        "date": to_user_friendly_utc(existing.created_at),
-        "last_edited": to_user_friendly_utc(existing.updated_at),
+        "date": to_user_friendly_local(existing.created_at),
+        "last_edited": to_user_friendly_local(existing.updated_at),
         "can_publish": existing.can_publish,
         "tags": sorted(tag.name for tag in existing.tags),
     }
