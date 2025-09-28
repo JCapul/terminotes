@@ -123,6 +123,7 @@ def create_log_entry(
     ctx: AppContext,
     body: str,
     *,
+    created_at: datetime | None = None,
     warn: WarnFunc | None = None,
     tags: Iterable[str] | None = None,
 ) -> Note:
@@ -135,6 +136,7 @@ def create_log_entry(
         body=body,
         description="",
         can_publish=False,
+        created_at=created_at,
         tags=list(tags) if tags is not None else None,
     )
     # Commit the DB update locally (no network interaction).
@@ -147,6 +149,7 @@ def create_link_entry(
     url: str,
     comment: str = "",
     *,
+    created_at: datetime | None = None,
     warn: WarnFunc | None = None,
     tags: Iterable[str] | None = None,
 ) -> tuple[Note, dict[str, str] | None]:
@@ -195,6 +198,7 @@ def create_link_entry(
         title=title,
         body=body,
         can_publish=False,
+        created_at=created_at,
         tags=link_tags,
         extra_data=extra_data,
     )

@@ -27,7 +27,7 @@ from .services.notes import (
     update_via_editor,
 )
 from .storage import Storage, StorageError
-from .utils.datetime_fmt import to_user_friendly_local
+from .utils.datetime_fmt import parse_user_datetime, to_user_friendly_local
 
 
 class TerminotesCliError(click.ClickException):
@@ -137,12 +137,20 @@ def edit(ctx: click.Context, note_id: int | None, edit_last: bool) -> None:
     multiple=True,
     help="Tag to associate with the new note (repeatable)",
 )
+@click.option(
+    "--created",
+    "created_opt",
+    type=str,
+    default=None,
+    help="Set creation time (ISO 8601 or 'YYYY-MM-DD HH:MM').",
+)
 @click.argument("content", nargs=-1)
 @click.pass_context
 def log(
     ctx: click.Context,
     content: tuple[str, ...],
     tags: tuple[str, ...],
+    created_opt: str | None,
 ) -> None:
     """Create a new log entry from CLI content.
 
@@ -157,8 +165,15 @@ def log(
 
     tags = ("log",) + tags
 
+    created_at = None
+    if created_opt:
+        try:
+            created_at = parse_user_datetime(created_opt)
+        except ValueError as exc:
+            raise TerminotesCliError(str(exc)) from exc
+
     try:
-        note = create_log_entry(app, body, tags=tags)
+        note = create_log_entry(app, body, tags=tags, created_at=created_at)
     except (StorageError, GitSyncError) as exc:  # pragma: no cover - pass-through
         raise TerminotesCliError(str(exc)) from exc
 
@@ -175,14 +190,32 @@ def log(
     multiple=True,
     help="Tag to associate with the link note (repeatable)",
 )
+@click.option(
+    "--created",
+    "created_opt",
+    type=str,
+    default=None,
+    help="Set creation time (ISO 8601 or 'YYYY-MM-DD HH:MM').",
+)
 @click.pass_context
 def link(
-    ctx: click.Context, url: str, comment: tuple[str, ...], tags: tuple[str, ...]
+    ctx: click.Context,
+    url: str,
+    comment: tuple[str, ...],
+    tags: tuple[str, ...],
+    created_opt: str | None,
 ) -> None:
     """Capture a URL with optional comment and Wayback fallback."""
 
     app: AppContext = ctx.obj["app"]
     comment_text = " ".join(comment).strip()
+
+    created_at = None
+    if created_opt:
+        try:
+            created_at = parse_user_datetime(created_opt)
+        except ValueError as exc:
+            raise TerminotesCliError(str(exc)) from exc
 
     try:
         note, snapshot = create_link_entry(
@@ -190,6 +223,7 @@ def link(
             url,
             comment_text,
             tags=tags,
+            created_at=created_at,
             warn=lambda msg: click.echo(msg),
         )
     except ValueError as exc:

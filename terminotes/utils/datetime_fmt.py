@@ -52,7 +52,8 @@ def parse_user_datetime(value: str) -> datetime:
     try:
         dt = datetime.fromisoformat(iso_candidate)
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            local_tz = datetime.now(tz=timezone.utc).astimezone().tzinfo or timezone.utc
+            dt = dt.replace(tzinfo=local_tz)
         return dt.astimezone(timezone.utc)
     except ValueError:
         pass

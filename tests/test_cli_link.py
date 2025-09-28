@@ -10,6 +10,7 @@ from terminotes import cli
 from terminotes import config as config_module
 from terminotes.git_sync import GitSync
 from terminotes.storage import DB_FILENAME, Storage
+from terminotes.utils.datetime_fmt import parse_user_datetime
 
 
 def _write_config(base_dir: Path) -> Path:
@@ -132,3 +133,39 @@ def test_link_command_uses_page_title(tmp_path, monkeypatch) -> None:
     storage.initialize()
     saved = storage.fetch_note(1)
     assert saved.title == "Example Title (example.com)"
+
+
+def test_link_accepts_created_option(tmp_path, monkeypatch) -> None:
+    config_path = _write_config(tmp_path)
+    repo_dir = tmp_path / "notes-repo"
+
+    _set_default_paths(config_path, monkeypatch)
+    monkeypatch.setattr(GitSync, "ensure_local_clone", lambda self: None)
+    monkeypatch.setattr(
+        GitSync, "commit_db_update", lambda self, path, message=None: None
+    )
+
+    monkeypatch.setattr(
+        "terminotes.services.notes.fetch_latest_snapshot",
+        lambda _url: None,
+    )
+    monkeypatch.setattr(
+        "terminotes.services.notes.get_page_title",
+        lambda _url: None,
+    )
+
+    runner = CliRunner()
+    created_str = "2024-06-15 14:45"
+    result = runner.invoke(
+        cli.cli,
+        ["link", "--created", created_str, "https://example.com"],
+    )
+
+    assert result.exit_code == 0, result.output
+
+    storage = Storage(repo_dir / DB_FILENAME)
+    storage.initialize()
+    note = storage.fetch_note(1)
+    expected = parse_user_datetime(created_str)
+    assert note.created_at == expected
+    assert note.updated_at == expected

@@ -45,3 +45,26 @@ def test_parse_user_datetime_accepts_legacy_format() -> None:
     parsed = parse_user_datetime(legacy)
     expected = datetime(2024, 1, 1, 12, 34, tzinfo=timezone.utc)
     assert parsed == expected
+
+
+@pytest.mark.skipif(
+    not hasattr(time, "tzset"),
+    reason="time.tzset is required to adjust the local timezone in tests",
+)
+def test_parse_user_datetime_accepts_naive_local_format() -> None:
+    original = os.environ.get("TZ")
+    os.environ["TZ"] = "Europe/Paris"
+    time.tzset()
+    try:
+        naive = "2024-05-01 09:30"
+        parsed = parse_user_datetime(naive)
+
+        local_tz = datetime.now().astimezone().tzinfo or timezone.utc
+        localized = datetime(2024, 5, 1, 9, 30, tzinfo=local_tz)
+        assert parsed == localized.astimezone(timezone.utc)
+    finally:
+        if original is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = original
+        time.tzset()
