@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.5.0 - 2025-09-28
+
+- feat(cli): allow setting created timestamp on log and link
 ## 0.4.1 - 2025-09-27
 
 - fix(editor): refresh last edited and expose extra data (e.g. links)
