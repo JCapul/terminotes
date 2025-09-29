@@ -18,6 +18,7 @@ from peewee import (
     SqliteDatabase,
     TextField,
     fn,
+    prefetch,
 )
 
 DB_FILENAME = "terminotes.sqlite3"
@@ -172,24 +173,24 @@ class Storage:
 
         with self._connection():
             try:
-                note = Note.create(
-                    title=normalized_title,
-                    body=normalized_body,
-                    description=description,
-                    created_at=created,
-                    updated_at=updated,
-                    can_publish=can_publish,
-                    extra_data=self._dump_extra_data(extra_data),
-                )
+                with self._database.atomic():
+                    note = Note.create(
+                        title=normalized_title,
+                        body=normalized_body,
+                        description=description,
+                        created_at=created,
+                        updated_at=updated,
+                        can_publish=can_publish,
+                        extra_data=self._dump_extra_data(extra_data),
+                    )
+
+                    if tag_names:
+                        tag_models = [
+                            Tag.get_or_create(name=name)[0] for name in tag_names
+                        ]
+                        note.tags.add(tag_models)
             except Exception as exc:  # pragma: no cover - defensive
                 raise StorageError(f"Failed to insert note: {exc}") from exc
-
-            if tag_names:
-                try:
-                    tag_models = [Tag.get_or_create(name=name)[0] for name in tag_names]
-                except Exception as exc:  # pragma: no cover - defensive
-                    raise StorageError(f"Failed to save tags: {exc}") from exc
-                note.tags.add(tag_models)
 
         return note
 
@@ -238,31 +239,33 @@ class Storage:
 
         with self._connection():
             try:
-                note = Note.get_by_id(int(note_id))
+                with self._database.atomic():
+                    note = Note.get_by_id(int(note_id))
+
+                    note.title = normalized_title
+                    note.body = normalized_body
+                    note.description = description
+                    note.updated_at = new_updated
+                    if new_created is not None:
+                        note.created_at = new_created
+                    if can_publish is not None:
+                        note.can_publish = can_publish
+                    if extra_data is not _UNSET:
+                        note.extra_data = self._dump_extra_data(extra_data)
+
+                    note.save()
+
+                    if tag_names is not None:
+                        tag_models = [
+                            Tag.get_or_create(name=name)[0] for name in tag_names
+                        ]
+                        note.tags.clear()
+                        if tag_models:
+                            note.tags.add(tag_models)
             except DoesNotExist:
                 raise StorageError(f"Note '{note_id}' not found.") from None
-
-            note.title = normalized_title
-            note.body = normalized_body
-            note.description = description
-            note.updated_at = new_updated
-            if new_created is not None:
-                note.created_at = new_created
-            if can_publish is not None:
-                note.can_publish = can_publish
-            if extra_data is not _UNSET:
-                note.extra_data = self._dump_extra_data(extra_data)
-
-            note.save()
-
-            if tag_names is not None:
-                try:
-                    tag_models = [Tag.get_or_create(name=name)[0] for name in tag_names]
-                except Exception as exc:  # pragma: no cover - defensive
-                    raise StorageError(f"Failed to save tags: {exc}") from exc
-                note.tags.clear()
-                if tag_models:
-                    note.tags.add(tag_models)
+            except Exception as exc:  # pragma: no cover - defensive
+                raise StorageError(f"Failed to update note: {exc}") from exc
 
         return note
 
@@ -289,7 +292,8 @@ class Storage:
         snapshots: list[NoteSnapshot] = []
         with self._connection():
             query = Note.select().order_by(Note.updated_at.desc())
-            for note in query:
+            prefetched = prefetch(query, self._through_model, Tag)
+            for note in prefetched:
                 tag_names = sorted({tag.name for tag in note.tags})
                 snapshots.append(
                     NoteSnapshot(
@@ -340,11 +344,13 @@ class Storage:
 
     def _apply_tag_filter(self, query, tag_names: list[str]):
         through = self._through_model
+        tag_count = len(tag_names)
         return (
             query.join(through, on=(through.note == Note.id))
             .join(Tag)
             .where(Tag.name.in_(tag_names))
-            .distinct()
+            .group_by(Note.id)
+            .having(fn.COUNT(fn.DISTINCT(Tag.id)) == tag_count)
         )
 
     def _ensure_extra_data_column(self) -> None:

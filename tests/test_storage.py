@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+import pytest
 from terminotes.storage import DB_FILENAME, Storage, StorageError
 
 
@@ -86,6 +87,34 @@ def test_tags_created_and_updated(tmp_path) -> None:
 
     fetched = storage.fetch_note(created.id)
     assert list(fetched.tags) == []
+
+
+def test_create_note_rolls_back_on_tag_failure(tmp_path, monkeypatch) -> None:
+    storage = Storage(tmp_path / DB_FILENAME)
+    storage.initialize()
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("terminotes.storage.Tag.get_or_create", boom)
+
+    with pytest.raises(StorageError):
+        storage.create_note("Title", "Body", tags=["fail"])
+
+    assert storage.count_notes() == 0
+
+
+def test_list_notes_requires_all_tags(tmp_path) -> None:
+    storage = Storage(tmp_path / DB_FILENAME)
+    storage.initialize()
+
+    alpha = storage.create_note("Alpha", "Body", tags=["work", "focus"])
+    storage.create_note("Beta", "Body", tags=["work"])
+    storage.create_note("Gamma", "Body", tags=["focus"])
+
+    filtered = storage.list_notes(tags=["work", "focus"])
+
+    assert [note.id for note in filtered] == [alpha.id]
 
 
 def test_extra_data_round_trip(tmp_path) -> None:
