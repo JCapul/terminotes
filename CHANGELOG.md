@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.1 - 2025-10-01
+
+- fix(storage): clear tag relations before deleting notes
+- fix(storage): harden transactional updates and tag filters
+
 ## 0.5.0 - 2025-09-28
 
 - feat(cli): allow setting created timestamp on log and link
