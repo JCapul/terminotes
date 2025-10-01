@@ -282,9 +282,15 @@ class Storage:
 
     def delete_note(self, note_id: int) -> None:
         with self._connection():
-            deleted = Note.delete().where(Note.id == int(note_id)).execute()
-            if deleted == 0:
-                raise StorageError(f"Note '{note_id}' not found.")
+            try:
+                with self._database.atomic():
+                    note = Note.get_by_id(int(note_id))
+                    note.tags.clear()
+                    note.delete_instance()
+            except DoesNotExist:
+                raise StorageError(f"Note '{note_id}' not found.") from None
+            except Exception as exc:  # pragma: no cover - defensive
+                raise StorageError(f"Failed to delete note: {exc}") from exc
 
     def snapshot_notes(self) -> list["NoteSnapshot"]:
         """Return all notes with tags for export scenarios."""

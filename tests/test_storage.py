@@ -136,3 +136,22 @@ def test_extra_data_round_trip(tmp_path) -> None:
     storage.update_note(created.id, "Link note", "Body", extra_data=None)
     refetched = storage.fetch_note(created.id)
     assert refetched.extra_data is None
+
+
+def test_delete_note_removes_associations(tmp_path) -> None:
+    storage = Storage(tmp_path / DB_FILENAME)
+    storage.initialize()
+
+    created = storage.create_note("Tagged", "Body", tags=["work", "focus"])
+    assert sorted(tag.name for tag in created.tags) == ["focus", "work"]
+
+    storage.delete_note(created.id)
+
+    assert storage.count_notes() == 0
+    with pytest.raises(StorageError):
+        storage.fetch_note(created.id)
+
+    # New note with same tags succeeds once associations are cleared.
+    replacement = storage.create_note("Fresh", "Body", tags=["work"])
+    assert storage.count_notes() == 1
+    assert replacement.title == "Fresh"
