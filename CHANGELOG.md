@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.0 - 2025-10-04
+
+- feat(info): surface tags summary
+- feat(cli): add prune subcommand
+
 ## 0.5.1 - 2025-10-01
 
 - fix(storage): clear tag relations before deleting notes
