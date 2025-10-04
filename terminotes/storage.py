@@ -280,6 +280,13 @@ class Storage:
         with self._connection():
             return Note.select().count()
 
+    def list_tags(self) -> list[str]:
+        """Return all tag names sorted alphabetically."""
+
+        with self._connection():
+            query = Tag.select(Tag.name).order_by(Tag.name.asc())
+            return [tag.name for tag in query]
+
     def delete_note(self, note_id: int) -> None:
         with self._connection():
             try:

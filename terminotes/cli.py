@@ -554,6 +554,7 @@ def info(ctx: click.Context) -> None:
 
     db_path = storage.path
     total_notes = storage.count_notes()
+    tag_names = storage.list_tags()
 
     try:
         last_note = storage.fetch_last_updated_note()
@@ -568,6 +569,8 @@ def info(ctx: click.Context) -> None:
     click.echo("Terminotes repository info:\n")
     click.echo(f"  Database file : {db_path}")
     click.echo(f"  Total notes   : {total_notes}")
+    tags_display = ", ".join(tag_names) if tag_names else "(none)"
+    click.echo(f"  Tags          : {tags_display}")
     click.echo(f"  Last edited   : {last_id} – {last_title_display}")
     click.echo("\nConfiguration:\n")
     click.echo(config_dump)

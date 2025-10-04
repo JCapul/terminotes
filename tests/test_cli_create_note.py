@@ -375,7 +375,7 @@ def test_info_command_displays_repo_and_config(tmp_path, monkeypatch, capsys) ->
 
     storage = Storage(repo_dir / DB_FILENAME)
     storage.initialize()
-    storage.create_note("Info title", "Info body")
+    storage.create_note("Info title", "Info body", tags=["beta", "alpha"])
 
     runner = CliRunner()
     result = runner.invoke(cli.cli, ["info"])
@@ -384,5 +384,23 @@ def test_info_command_displays_repo_and_config(tmp_path, monkeypatch, capsys) ->
     output = result.output
     assert "Database file" in output
     assert "Total notes" in output
+    assert "Tags          : alpha, beta" in output
     assert "Last edited" in output
     assert "git_remote_url" in output
+
+
+def test_info_command_shows_none_when_no_tags(tmp_path, monkeypatch) -> None:
+    config_path = _write_config(tmp_path)
+    repo_dir = tmp_path / "notes-repo"
+    _set_default_paths(config_path, monkeypatch)
+    monkeypatch.setattr(GitSync, "ensure_local_clone", lambda self: None)
+
+    storage = Storage(repo_dir / DB_FILENAME)
+    storage.initialize()
+
+    runner = CliRunner()
+    result = runner.invoke(cli.cli, ["info"])
+
+    assert result.exit_code == 0, result.output
+    output = result.output
+    assert "Tags          : (none)" in output
