@@ -343,6 +343,38 @@ class Storage:
                 query = self._apply_tag_filter(query, tag_names)
             return list(query)
 
+    def prune_unused_tags(self) -> "PruneResult":
+        """Remove tag associations that point to missing rows and drop orphan tags."""
+
+        through_table = self._through_model._meta.table_name
+
+        with self._connection():
+            try:
+                with self._database.atomic():
+                    orphan_links_cursor = self._database.execute_sql(
+                        (
+                            f"DELETE FROM {through_table} "
+                            f"WHERE note_id NOT IN (SELECT id FROM {TABLE_NOTES}) "
+                            f"   OR tag_id NOT IN (SELECT id FROM {TABLE_TAGS})"
+                        )
+                    )
+                    removed_links = max(orphan_links_cursor.rowcount or 0, 0)
+
+                    orphan_tags_cursor = self._database.execute_sql(
+                        (
+                            f"DELETE FROM {TABLE_TAGS} "
+                            f"WHERE NOT EXISTS ("
+                            f"    SELECT 1 FROM {through_table} "
+                            f"    WHERE {through_table}.tag_id = {TABLE_TAGS}.id"
+                            f")"
+                        )
+                    )
+                    removed_tags = max(orphan_tags_cursor.rowcount or 0, 0)
+            except Exception as exc:  # pragma: no cover - defensive
+                raise StorageError(f"Failed to prune tags: {exc}") from exc
+
+        return PruneResult(removed_links=removed_links, removed_tags=removed_tags)
+
     @contextmanager
     def _connection(self):
         with self._database.connection_context():
@@ -387,6 +419,14 @@ class Storage:
         except json.JSONDecodeError:
             return None
         return loaded if isinstance(loaded, dict) else None
+
+
+@dataclass(slots=True)
+class PruneResult:
+    """Report counts for storage pruning operations."""
+
+    removed_links: int
+    removed_tags: int
 
 
 @dataclass(slots=True)

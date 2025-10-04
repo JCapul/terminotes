@@ -26,7 +26,7 @@ from .services.notes import (
     create_via_editor,
     update_via_editor,
 )
-from .storage import Storage, StorageError
+from .storage import PruneResult, Storage, StorageError
 from .utils.datetime_fmt import parse_user_datetime, to_user_friendly_local
 
 
@@ -270,6 +270,37 @@ def delete(ctx: click.Context, note_id: int, assume_yes: bool) -> None:
         raise TerminotesCliError(str(exc)) from exc
 
     click.echo(f"Deleted note {note_id}")
+
+
+@cli.command()
+@click.pass_context
+def prune(ctx: click.Context) -> None:
+    """Remove unused tags and stale tag associations from the database."""
+
+    app: AppContext = ctx.obj["app"]
+    storage: Storage = app.storage
+
+    try:
+        prune_result: PruneResult = storage.prune_unused_tags()
+    except StorageError as exc:
+        raise TerminotesCliError(str(exc)) from exc
+
+    if prune_result.removed_tags == 0 and prune_result.removed_links == 0:
+        click.echo("Nothing to prune; tag tables already clean.")
+        return
+
+    try:
+        app.git_sync.commit_db_update(storage.path, "chore(db): prune unused tags")
+    except GitSyncError as exc:  # pragma: no cover - pass-through
+        raise TerminotesCliError(str(exc)) from exc
+
+    tag_label = "tag" if prune_result.removed_tags == 1 else "tags"
+    link_label = "link" if prune_result.removed_links == 1 else "links"
+    click.echo(
+        "Pruned "
+        f"{prune_result.removed_tags} {tag_label} and "
+        f"{prune_result.removed_links} orphaned {link_label}."
+    )
 
 
 @cli.command()

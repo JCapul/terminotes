@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 
 import pytest
-from terminotes.storage import DB_FILENAME, Storage, StorageError
+from terminotes.storage import DB_FILENAME, TABLE_TAGS, Storage, StorageError
 
 
 def test_create_note_persists_content(tmp_path) -> None:
@@ -155,3 +156,25 @@ def test_delete_note_removes_associations(tmp_path) -> None:
     replacement = storage.create_note("Fresh", "Body", tags=["work"])
     assert storage.count_notes() == 1
     assert replacement.title == "Fresh"
+
+
+def test_prune_unused_tags_removes_orphans(tmp_path) -> None:
+    storage = Storage(tmp_path / DB_FILENAME)
+    storage.initialize()
+
+    note = storage.create_note("Tagged", "Body", tags=["focus"])
+    # Clearing tags leaves a dangling 'focus' entry in the tags table.
+    storage.update_note(note.id, "Tagged", "Body", tags=[])
+
+    result = storage.prune_unused_tags()
+
+    assert result.removed_links == 0
+    assert result.removed_tags == 1
+
+    conn = sqlite3.connect(storage.path)
+    try:
+        remaining = conn.execute(f"SELECT COUNT(*) FROM {TABLE_TAGS}").fetchone()
+    finally:
+        conn.close()
+
+    assert remaining is not None and int(remaining[0]) == 0

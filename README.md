@@ -99,6 +99,9 @@ Below are the primary subcommands. Use `tn --help` and `tn <cmd> --help` for det
   - Example: `tn delete --yes 42`
   - Uses a confirmation prompt unless `--yes` is provided.
 
+- `prune` — Remove unused tags and stale tag associations.
+  - Example: `tn prune`
+
 - `sync` — Fetch, detect divergence, and push with the selected strategy.
   - Requires a clean working tree; commit or stash changes first.
   - Divergence prompt choices: `local-wins`, `remote-wins`, or `abort`.
@@ -138,7 +141,7 @@ Timestamps are stored in UTC.
 
 ## Git Sync
 
-Terminotes uses your local clone of the notes repository and commits SQLite changes locally during `edit`/`log`/`delete`. Network interaction only happens during `tn sync`:
+Terminotes uses your local clone of the notes repository and commits SQLite changes locally during `edit`/`log`/`delete`/`prune`. Network interaction only happens during `tn sync`:
 
 - `fetch --prune` then divergence detection.
 - If remote-ahead or diverged, you can pick:
