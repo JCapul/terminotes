@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.1 - 2025-10-06
+
+- chore(script): minor update on release script
+- refactor(cli): move delete and prune into services
+- feat(cli): add short flags and help alias
+- feat(cli): rename export flag to format
+
 ## 0.6.0 - 2025-10-04
 
 - feat(info): surface tags summary
