@@ -174,17 +174,6 @@ def create_link_entry(
         }
     }
 
-    body_lines: list[str] = []
-    if comment_text:
-        body_lines.append(comment_text)
-        body_lines.append("")
-    body_lines.append(f"[{source_url}]({source_url})")
-    if wayback_url is not None:
-        body_lines.append("")
-        body_lines.append(f"Wayback fallback: [{wayback_url}]({wayback_url})")
-
-    body = "\n".join(body_lines)
-
     page_title = get_page_title(source_url)
     title = page_title or _derive_title_from_body(comment_text)
     if title:
@@ -196,7 +185,7 @@ def create_link_entry(
 
     note = ctx.storage.create_note(
         title=title,
-        body=body,
+        body=comment_text,
         can_publish=False,
         created_at=created_at,
         tags=link_tags,
