@@ -12,7 +12,7 @@ from ..storage import Storage
 def export_notes(
     storage: Storage,
     *,
-    target: str,
+    export_format: str,
     destination: Path,
     site_title: str | None = None,
     templates_root: Path | None = None,
@@ -21,15 +21,15 @@ def export_notes(
 
     notes = storage.snapshot_notes()
     dest = destination
-    target_lower = target.lower()
+    format_lower = export_format.lower()
 
-    if target_lower == "html":
+    if format_lower == "html":
         templates_dir = (templates_root or DEFAULT_CONFIG_DIR) / TEMPLATE_RELATIVE_DIR
         exporter = HtmlExporter(templates_dir, site_title=site_title or "Terminotes")
         return exporter.export(notes, dest)
 
-    if target_lower == "markdown":
+    if format_lower == "markdown":
         exporter = MarkdownExporter()
         return exporter.export(notes, dest)
 
-    raise ExportError(f"Unknown export format: {target}")
+    raise ExportError(f"Unknown export format: {export_format}")

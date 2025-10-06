@@ -52,7 +52,7 @@ def test_export_html_creates_static_site(tmp_path: Path, monkeypatch) -> None:
         cli.cli,
         [
             "export",
-            "--to",
+            "--format",
             "html",
             "--dest",
             str(output_dir),
@@ -80,7 +80,7 @@ def test_export_markdown_writes_files(tmp_path: Path, monkeypatch) -> None:
     output_dir = tmp_path / "md"
     result = runner.invoke(
         cli.cli,
-        ["export", "--to", "markdown", "--dest", str(output_dir)],
+        ["export", "--format", "markdown", "--dest", str(output_dir)],
     )
 
     assert result.exit_code == 0, result.output

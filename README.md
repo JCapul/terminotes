@@ -107,8 +107,8 @@ Below are the primary subcommands. Use `tn --help` and `tn <cmd> --help` for det
   - Divergence prompt choices: `local-wins`, `remote-wins`, or `abort`.
 
 - `export` — Render notes to a static site or Markdown files.
-  - HTML: `tn export --to html --dest ./site --site-title "My Notes"`
-  - Markdown: `tn export --to markdown --dest ./markdown`
+  - HTML: `tn export --format html --dest ./site --site-title "My Notes"`
+  - Markdown: `tn export --format markdown --dest ./markdown`
   - Outputs go into the destination directory, which is created if missing.
 
 - `info` — Show current repo path, totals, and last edited note.

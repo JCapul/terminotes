@@ -497,8 +497,8 @@ def search(
 
 @cli.command()
 @click.option(
-    "--to",
-    "target",
+    "--format",
+    "export_format",
     type=click.Choice(["html", "markdown"], case_sensitive=False),
     required=True,
     help="Export format",
@@ -517,7 +517,9 @@ def search(
     help="Site title for HTML exports",
 )
 @click.pass_context
-def export(ctx: click.Context, target: str, destination: Path, site_title: str) -> None:
+def export(
+    ctx: click.Context, export_format: str, destination: Path, site_title: str
+) -> None:
     """Export notes as HTML or Markdown."""
 
     app: AppContext = ctx.obj["app"]
@@ -532,7 +534,7 @@ def export(ctx: click.Context, target: str, destination: Path, site_title: str) 
     try:
         count = run_export(
             app.storage,
-            target=target,
+            export_format=export_format,
             destination=destination,
             site_title=site_title,
             templates_root=templates_root,
