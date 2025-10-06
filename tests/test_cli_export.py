@@ -80,7 +80,7 @@ def test_export_markdown_writes_files(tmp_path: Path, monkeypatch) -> None:
     output_dir = tmp_path / "md"
     result = runner.invoke(
         cli.cli,
-        ["export", "--format", "markdown", "--dest", str(output_dir)],
+        ["export", "-f", "markdown", "-d", str(output_dir)],
     )
 
     assert result.exit_code == 0, result.output
@@ -89,3 +89,13 @@ def test_export_markdown_writes_files(tmp_path: Path, monkeypatch) -> None:
     content = md_files[0].read_text(encoding="utf-8")
     assert content.startswith("---")
     assert "Body text" in content or "Another body" in content
+
+
+def test_export_help_short_flag(monkeypatch) -> None:
+    monkeypatch.setattr(GitSync, "ensure_local_clone", lambda self: None)
+    runner = CliRunner()
+
+    result = runner.invoke(cli.cli, ["export", "-h"])
+
+    assert result.exit_code == 0
+    assert "Usage" in result.output

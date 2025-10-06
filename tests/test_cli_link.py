@@ -158,7 +158,7 @@ def test_link_accepts_created_option(tmp_path, monkeypatch) -> None:
     created_str = "2024-06-15 14:45"
     result = runner.invoke(
         cli.cli,
-        ["link", "--created", created_str, "https://example.com"],
+        ["link", "-c", created_str, "https://example.com"],
     )
 
     assert result.exit_code == 0, result.output

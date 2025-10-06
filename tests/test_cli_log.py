@@ -139,7 +139,7 @@ def test_log_accepts_created_option(tmp_path: Path, monkeypatch) -> None:
     created_str = "2024-06-15 14:45"
     result = runner.invoke(
         cli.cli,
-        ["log", "--created", created_str, "--", "Note with timestamp"],
+        ["log", "-c", created_str, "--", "Note with timestamp"],
     )
 
     assert result.exit_code == 0, result.output

@@ -29,13 +29,16 @@ from .services.notes import (
 from .storage import PruneResult, Storage, StorageError
 from .utils.datetime_fmt import parse_user_datetime, to_user_friendly_local
 
+CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
+
 
 class TerminotesCliError(click.ClickException):
     """Shared Click exception wrapper for CLI failures."""
 
 
-@click.group()
+@click.group(context_settings=CONTEXT_SETTINGS)
 @click.option(
+    "-c",
     "--config",
     "config_path_opt",
     type=click.Path(path_type=Path),
@@ -138,6 +141,7 @@ def edit(ctx: click.Context, note_id: int | None, edit_last: bool) -> None:
     help="Tag to associate with the new note (repeatable)",
 )
 @click.option(
+    "-c",
     "--created",
     "created_opt",
     type=str,
@@ -191,6 +195,7 @@ def log(
     help="Tag to associate with the link note (repeatable)",
 )
 @click.option(
+    "-c",
     "--created",
     "created_opt",
     type=str,
@@ -304,7 +309,7 @@ def prune(ctx: click.Context) -> None:
 
 
 @cli.command()
-@click.option("--dry-run", is_flag=True, help="Show actions without executing.")
+@click.option("-d", "--dry-run", is_flag=True, help="Show actions without executing.")
 @click.pass_context
 def sync(ctx: click.Context, dry_run: bool) -> None:
     """Synchronize local notes repo with the remote.
@@ -497,6 +502,7 @@ def search(
 
 @cli.command()
 @click.option(
+    "-f",
     "--format",
     "export_format",
     type=click.Choice(["html", "markdown"], case_sensitive=False),
@@ -504,6 +510,7 @@ def search(
     help="Export format",
 )
 @click.option(
+    "-d",
     "--dest",
     "destination",
     type=click.Path(path_type=Path, file_okay=False),
@@ -511,6 +518,7 @@ def search(
     help="Destination directory for the export",
 )
 @click.option(
+    "-s",
     "--site-title",
     default="Terminotes",
     show_default=True,
@@ -545,7 +553,7 @@ def export(
     click.echo(f"Exported {count} notes to {destination}")
 
 
-@cli.command()
+@cli.command(context_settings=CONTEXT_SETTINGS)
 @click.pass_context
 def info(ctx: click.Context) -> None:
     """Display repository information and current configuration."""
