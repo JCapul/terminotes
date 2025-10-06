@@ -19,6 +19,7 @@ from .config import (
 from .editor import EditorError, open_editor
 from .exporters import ExportError
 from .git_sync import GitSync, GitSyncError
+from .services.delete import delete_note as delete_note_workflow
 from .services.export import export_notes as run_export
 from .services.notes import (
     create_link_entry,
@@ -26,6 +27,7 @@ from .services.notes import (
     create_via_editor,
     update_via_editor,
 )
+from .services.prune import prune_unused as prune_unused_workflow
 from .storage import PruneResult, Storage, StorageError
 from .utils.datetime_fmt import parse_user_datetime, to_user_friendly_local
 
@@ -256,8 +258,6 @@ def delete(ctx: click.Context, note_id: int, assume_yes: bool) -> None:
     """Delete a note identified by NOTE_ID from the database."""
 
     app: AppContext = ctx.obj["app"]
-    storage: Storage = app.storage
-
     if not assume_yes:
         confirm = click.confirm(
             f"Delete note {note_id}?", default=False, show_default=True
@@ -266,9 +266,7 @@ def delete(ctx: click.Context, note_id: int, assume_yes: bool) -> None:
             raise TerminotesCliError("Deletion aborted.")
 
     try:
-        storage.delete_note(note_id)
-        # Commit the DB update locally (no network interaction).
-        app.git_sync.commit_db_update(storage.path, f"chore(db): delete note {note_id}")
+        delete_note_workflow(app, note_id)
     except StorageError as exc:
         raise TerminotesCliError(str(exc)) from exc
     except GitSyncError as exc:  # pragma: no cover - pass-through
@@ -283,21 +281,14 @@ def prune(ctx: click.Context) -> None:
     """Remove unused tags and stale tag associations from the database."""
 
     app: AppContext = ctx.obj["app"]
-    storage: Storage = app.storage
-
     try:
-        prune_result: PruneResult = storage.prune_unused_tags()
-    except StorageError as exc:
+        prune_result: PruneResult = prune_unused_workflow(app)
+    except (StorageError, GitSyncError) as exc:
         raise TerminotesCliError(str(exc)) from exc
 
     if prune_result.removed_tags == 0 and prune_result.removed_links == 0:
         click.echo("Nothing to prune; tag tables already clean.")
         return
-
-    try:
-        app.git_sync.commit_db_update(storage.path, "chore(db): prune unused tags")
-    except GitSyncError as exc:  # pragma: no cover - pass-through
-        raise TerminotesCliError(str(exc)) from exc
 
     tag_label = "tag" if prune_result.removed_tags == 1 else "tags"
     link_label = "link" if prune_result.removed_links == 1 else "links"
