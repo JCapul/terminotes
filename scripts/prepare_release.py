@@ -74,7 +74,10 @@ def main() -> None:
     clean_dist()
     run_command(["uv", "build"], "Building distribution artifacts")
 
-    print(f"\nRelease {new_version} prepared successfully.")
+    print(
+        f"\nRelease {new_version} prepared successfully. \
+            Don't forget to 'git push --tags' when you're done."
+    )
 
 
 def parse_args() -> argparse.Namespace:
