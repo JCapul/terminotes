@@ -1,4 +1,7 @@
-# Terminotes
+Terminotes
+  [![Version](http://img.shields.io/pypi/v/terminotes.svg?style=flat)](https://pypi.python.org/pypi/terminotes/)
+  [![Downloads](https://pepy.tech/badge/terminotes)](https://pepy.tech/project/terminotes)
+===
 
 Terminotes is a terminal-first note taking CLI, 99% vibecoded with Codex CLI and GPT-5 under my tight supervision 😉.
 
