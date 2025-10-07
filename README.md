@@ -5,7 +5,7 @@ Terminotes
 
 Terminotes is a terminal-first note taking CLI, 99% vibecoded with Codex CLI and GPT-5 under my tight supervision 😉.
 
-It focuses on fast capture from the shell, durable storage in SQLite, and simple Git synchronization so you can keep your notes database in a repo and carry it between machines.
+It focuses on fast capture from a shell, durable storage in SQLite, and simple Git synchronization so you can keep your notes database in a repo and carry it between machines.
 
 
 ## Features
@@ -30,7 +30,7 @@ Install Terminotes globally via uv:
 uv tool install terminotes
 ```
 
-This places the `tn` console script on your `PATH`, so you can invoke Terminotes from any shell without activating a virtual environment. Use `uv tool run tn --help` (or `tn --help` once your shell picks up the shims) to explore the CLI. If you prefer a local development checkout, follow the contributing instructions later in this document.
+This places the `tn` console script on your `PATH`, so you can invoke Terminotes from any shell without activating a virtual environment. Use `tn --help` to explore the CLI. If you prefer a local development checkout, follow the contributing instructions later in this document.
 
 ## Quick Start
 
@@ -160,40 +160,19 @@ In non-interactive sessions, prompts are disabled and an error message is shown 
 Use `uv` and the provided `Justfile` tasks:
 
 ```bash
-just bootstrap   # uv sync + pre-commit install
-just cli         # run CLI (defaults to --help)
-just fmt         # ruff format
-just lint        # ruff check
-just test        # pytest
+just bootstrap    # uv sync + pre-commit install
+just fmt          # ruff format
+just lint         # ruff check
+just test         # pytest
+just precommit    # run all pre-commit tasks
 ```
-
-Coding conventions:
-
-- PEP 8 with 4-space indentation, max line length 88.
-- Type hints for public functions; keep generics simple.
-- Keep runtime code under `terminotes/`; tests under `tests/`.
-
-## Testing
-
-Run tests with uv:
-
-```bash
-uv run pytest
-```
-
-Tests cover: SQLite persistence, CLI argument parsing, and Git workflows (git interactions are mocked in unit tests).
 
 ## Contributing
 
 Pull requests are welcome. Before submitting:
 
 - Follow Conventional Commits (e.g., `feat(cli): add search subcommand`).
-- Run `just fmt && just lint && just test`.
+- Run `just precommit`.
 - Include a summary, test output, and linked issues in your PR.
 
 See `AGENTS.md` for repository conventions and tips.
-
-## Security
-
-- Keep secrets and credentials outside the repo (e.g., system git credentials).
-- Terminotes validates inputs and parameterizes SQL; avoid pasting secrets into notes you intend to publish.
