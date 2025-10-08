@@ -21,6 +21,7 @@ from .exporters import ExportError
 from .git_sync import GitSync, GitSyncError
 from .services.delete import delete_note as delete_note_workflow
 from .services.export import export_notes as run_export
+from .services.export import get_export_format_choices, get_export_format_descriptions
 from .services.notes import (
     create_link_entry,
     create_log_entry,
@@ -32,6 +33,15 @@ from .storage import PruneResult, Storage, StorageError
 from .utils.datetime_fmt import parse_user_datetime, to_user_friendly_local
 
 CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
+
+_EXPORT_FORMAT_CHOICES = get_export_format_choices()
+if _EXPORT_FORMAT_CHOICES:
+    _EXPORT_FORMAT_HELP = "Export format. Available: " + ", ".join(
+        f"{fmt} ({desc})" if desc else fmt
+        for fmt, desc in get_export_format_descriptions()
+    )
+else:
+    _EXPORT_FORMAT_HELP = "Export format."
 
 
 class TerminotesCliError(click.ClickException):
@@ -496,9 +506,9 @@ def search(
     "-f",
     "--format",
     "export_format",
-    type=click.Choice(["html", "markdown"], case_sensitive=False),
+    type=click.Choice(_EXPORT_FORMAT_CHOICES, case_sensitive=False),
     required=True,
-    help="Export format",
+    help=_EXPORT_FORMAT_HELP,
 )
 @click.option(
     "-d",
@@ -519,7 +529,7 @@ def search(
 def export(
     ctx: click.Context, export_format: str, destination: Path, site_title: str
 ) -> None:
-    """Export notes as HTML or Markdown."""
+    """Export notes using the selected exporter plugin."""
 
     app: AppContext = ctx.obj["app"]
 
