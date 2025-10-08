@@ -12,10 +12,10 @@
 - [x] Define configuration access patterns for plugins (namespacing within the main TOML config and validation helpers).
 
 ## Exporter integration
-- [ ] Integrate the plugin manager into `services/export.py` to discover exporter contributions.
-- [ ] Move the HTML and Markdown exporters into built-in plugins that conform to the new interface.
-- [ ] Update the CLI export command to enumerate plugin-provided formats for validation and `--help` output.
-- [ ] Add tests ensuring plugin-provided exporters are discovered, invoked, and error-handled correctly.
+- [x] Integrate the plugin manager into `services/export.py` to discover exporter contributions.
+- [x] Move the HTML and Markdown exporters into built-in plugins that conform to the new interface.
+- [x] Update the CLI export command to enumerate plugin-provided formats for validation and `--help` output.
+- [x] Add tests ensuring plugin-provided exporters are discovered, invoked, and error-handled correctly.
 
 ## Optional utilities
 - [ ] Add shared plugin context utilities (e.g. access to `AppContext`, logging, configuration lookup) if exporters need them.

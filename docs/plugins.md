@@ -57,8 +57,16 @@ example, a plugin named `terminotes-export-aurora` would read from the section
 retrieves these mappings as immutable dictionaries and supports providing
 defaults when the section is absent.
 
+## Built-in exporters
+
+Terminotes ships HTML and Markdown exporters as built-in plugins located in
+`terminotes.plugins.builtin`. They register automatically during export
+discovery so the CLI can enumerate them for `tn export`. The HTML plugin
+honours the `site_title` and template overrides passed via the CLI, defaulting
+to the configuration directory's bundled templates.
+
 ## Next steps
 
-Future work will integrate the plugin manager with export services so the
-existing HTML/Markdown exporters become first-class plugins by default and wire
-bootstrap/config hooks into runtime workflows.
+Future iterations will expand shared plugin utilities, document advanced
+exporter authoring patterns, and harden error reporting for third-party
+distributions.
