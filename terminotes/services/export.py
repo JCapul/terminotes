@@ -7,15 +7,8 @@ from functools import lru_cache
 from pathlib import Path
 
 from ..exporters import ExportError
-from ..plugins import (
-    ExportContribution,
-    PluginLoadError,
-    PluginRegistrationError,
-    create_plugin_manager,
-    get_load_errors,
-    iter_export_contributions,
-    register_modules,
-)
+from ..plugins import ExportContribution, PluginLoadError, PluginRegistrationError
+from ..plugins.runtime import load_export_contributions, reset_plugin_manager_cache
 from ..storage import Storage
 
 
@@ -27,27 +20,9 @@ class ExportRegistry:
     load_errors: tuple[PluginLoadError, ...]
 
 
-def _iter_plugin_modules() -> tuple[object, ...]:
-    from ..plugins.builtin import BUILTIN_PLUGINS
-
-    return BUILTIN_PLUGINS
-
-
 @lru_cache(maxsize=1)
 def _load_export_registry() -> ExportRegistry:
-    manager = create_plugin_manager()
-    register_modules(manager, _iter_plugin_modules())
-
-    contributions: dict[str, ExportContribution] = {}
-    for contribution in iter_export_contributions(manager):
-        key = contribution.format_id.lower()
-        if key in contributions:
-            raise PluginRegistrationError(
-                f"Duplicate export format detected: '{contribution.format_id}'."
-            )
-        contributions[key] = contribution
-
-    load_errors = tuple(get_load_errors(manager))
+    contributions, load_errors = load_export_contributions()
     return ExportRegistry(contributions=contributions, load_errors=load_errors)
 
 
@@ -55,6 +30,7 @@ def clear_export_registry_cache() -> None:
     """Reset cached exporter discovery (primarily for testing)."""
 
     _load_export_registry.cache_clear()
+    reset_plugin_manager_cache()
 
 
 def get_export_format_choices() -> list[str]:
@@ -79,8 +55,6 @@ def export_notes(
     *,
     export_format: str,
     destination: Path,
-    site_title: str | None = None,
-    templates_root: Path | None = None,
 ) -> int:
     """Export all notes from storage to the given target format."""
 
@@ -106,17 +80,11 @@ def export_notes(
             raise ExportError(message)
         raise ExportError("No export plugins are available." + load_hint)
 
-    options: dict[str, object] = {}
-    if site_title is not None:
-        options["site_title"] = site_title
-    if templates_root is not None:
-        options["templates_root"] = templates_root
-
     try:
         return contribution.formatter(
             storage=storage,
             destination=destination,
-            options=options or None,
+            options=None,
         )
     except ExportError:
         raise

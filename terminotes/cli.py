@@ -9,7 +9,6 @@ import click
 
 from .app import AppContext, bootstrap
 from .config import (
-    DEFAULT_CONFIG_DIR,
     DEFAULT_CONFIG_PATH,
     ConfigError,
     MissingConfigError,
@@ -518,17 +517,8 @@ def search(
     required=True,
     help="Destination directory for the export",
 )
-@click.option(
-    "-s",
-    "--site-title",
-    default="Terminotes",
-    show_default=True,
-    help="Site title for HTML exports",
-)
 @click.pass_context
-def export(
-    ctx: click.Context, export_format: str, destination: Path, site_title: str
-) -> None:
+def export(ctx: click.Context, export_format: str, destination: Path) -> None:
     """Export notes using the selected exporter plugin."""
 
     app: AppContext = ctx.obj["app"]
@@ -536,17 +526,11 @@ def export(
     if destination.exists() and destination.is_file():
         raise TerminotesCliError("Destination must be a directory path.")
 
-    templates_root = (
-        app.config.source_path.parent if app.config.source_path else DEFAULT_CONFIG_DIR
-    )
-
     try:
         count = run_export(
             app.storage,
             export_format=export_format,
             destination=destination,
-            site_title=site_title,
-            templates_root=templates_root,
         )
     except ExportError as exc:
         raise TerminotesCliError(str(exc)) from exc

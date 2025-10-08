@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from terminotes.exporters import ExportError
 from terminotes.plugins import ExportContribution, hookimpl
+from terminotes.plugins import runtime as plugin_runtime
 from terminotes.services import export as export_service
 from terminotes.storage import Storage
 
@@ -17,17 +18,10 @@ def reset_export_registry() -> None:
     """Ensure plugin discovery cache is cleared between tests."""
 
     export_service.clear_export_registry_cache()
+    plugin_runtime.reset_plugin_manager_cache()
     yield
     export_service.clear_export_registry_cache()
-
-
-def _with_plugin(module: types.ModuleType):
-    original = export_service._iter_plugin_modules
-
-    def combined() -> tuple[object, ...]:
-        return original() + (module,)
-
-    return combined
+    plugin_runtime.reset_plugin_manager_cache()
 
 
 def test_export_notes_invokes_custom_plugin(tmp_path: Path, monkeypatch) -> None:
@@ -46,7 +40,7 @@ def test_export_notes_invokes_custom_plugin(tmp_path: Path, monkeypatch) -> None
             notes = storage.snapshot_notes()
             state["called"] = True
             state["notes"] = len(notes)
-            state["options"] = dict(options or {})
+            state["options"] = options
             return 99
 
         return (
@@ -59,7 +53,14 @@ def test_export_notes_invokes_custom_plugin(tmp_path: Path, monkeypatch) -> None
 
     module.export_formats = export_formats
 
-    monkeypatch.setattr(export_service, "_iter_plugin_modules", _with_plugin(module))
+    original_iter = plugin_runtime.iter_plugin_modules
+
+    def _combined() -> tuple[object, ...]:
+        return original_iter() + (module,)
+
+    monkeypatch.setattr(plugin_runtime, "iter_plugin_modules", _combined)
+    plugin_runtime.reset_plugin_manager_cache()
+    export_service.clear_export_registry_cache()
 
     storage = Storage(tmp_path / "notes.db")
     storage.initialize()
@@ -70,15 +71,13 @@ def test_export_notes_invokes_custom_plugin(tmp_path: Path, monkeypatch) -> None
         storage,
         export_format="dummy",
         destination=destination,
-        site_title="Custom",
-        templates_root=tmp_path,
     )
 
     assert count == 99
     assert destination.exists()
     assert state["called"] is True
     assert state["notes"] == 1
-    assert state["options"]["site_title"] == "Custom"
+    assert state["options"] is None
 
 
 def test_export_notes_wraps_plugin_error(tmp_path: Path, monkeypatch) -> None:
@@ -104,7 +103,14 @@ def test_export_notes_wraps_plugin_error(tmp_path: Path, monkeypatch) -> None:
 
     module.export_formats = export_formats
 
-    monkeypatch.setattr(export_service, "_iter_plugin_modules", _with_plugin(module))
+    original_iter = plugin_runtime.iter_plugin_modules
+
+    def _combined() -> tuple[object, ...]:
+        return original_iter() + (module,)
+
+    monkeypatch.setattr(plugin_runtime, "iter_plugin_modules", _combined)
+    plugin_runtime.reset_plugin_manager_cache()
+    export_service.clear_export_registry_cache()
 
     storage = Storage(tmp_path / "notes.db")
     storage.initialize()

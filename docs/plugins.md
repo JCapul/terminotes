@@ -61,9 +61,11 @@ defaults when the section is absent.
 
 Terminotes ships HTML and Markdown exporters as built-in plugins located in
 `terminotes.plugins.builtin`. They register automatically during export
-discovery so the CLI can enumerate them for `tn export`. The HTML plugin
-honours the `site_title` and template overrides passed via the CLI, defaulting
-to the configuration directory's bundled templates.
+discovery so the CLI can enumerate them for `tn export`. The HTML plugin reads
+its configuration from the table `[plugins."terminotes-builtin-html"]`,
+honouring keys such as `site_title` and an optional `templates_root`. When the
+section is absent, the plugin falls back to the configuration directory and
+ensures bundled templates exist during bootstrap.
 
 ## Next steps
 

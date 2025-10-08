@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import tomllib
 from dataclasses import dataclass
-from importlib import resources
 from pathlib import Path
 
 DEFAULT_CONFIG_DIR = Path("~/.config/terminotes").expanduser()
@@ -95,8 +94,6 @@ def load_config(path: Path | None = None) -> TerminotesConfig:
     if editor is not None and not isinstance(editor, str):
         raise InvalidConfigError("'editor' must be a string when provided")
 
-    ensure_export_templates(config_dir)
-
     return TerminotesConfig(
         git_remote_url=git_remote_url,
         terminotes_dir=terminotes_dir,
@@ -122,23 +119,4 @@ def bootstrap_config_file(path: Path) -> bool:
         'editor = "vim"\n'
     )
     path.write_text(default_content, encoding="utf-8")
-    ensure_export_templates(config_dir)
     return True
-
-
-def ensure_export_templates(config_dir: Path) -> None:
-    """Ensure default export templates exist under the configuration directory."""
-
-    target_dir = config_dir / TEMPLATE_RELATIVE_DIR
-    for filename in TEMPLATE_FILES:
-        target_path = target_dir / filename
-        if target_path.exists():
-            continue
-        target_path.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            data = (
-                resources.files(TEMPLATE_PACKAGE).joinpath(filename).read_text("utf-8")
-            )
-        except FileNotFoundError:  # pragma: no cover - defensive
-            continue
-        target_path.write_text(data, encoding="utf-8")

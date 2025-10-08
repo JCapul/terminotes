@@ -4,8 +4,8 @@ import json
 from datetime import datetime, timezone
 
 import yaml
-from terminotes.config import ensure_export_templates
-from terminotes.exporters import HtmlExporter, MarkdownExporter
+from terminotes.plugins.builtin.html import HtmlExporter, ensure_templates
+from terminotes.plugins.builtin.markdown import MarkdownExporter
 from terminotes.storage import NoteSnapshot
 
 
@@ -31,7 +31,7 @@ def _sample_note(
 
 
 def test_html_exporter_writes_site(tmp_path) -> None:
-    ensure_export_templates(tmp_path)
+    ensure_templates(tmp_path)
     templates_dir = tmp_path / "templates" / "export" / "html"
 
     exporter = HtmlExporter(templates_dir, site_title="My Notes")

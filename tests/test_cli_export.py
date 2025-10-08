@@ -11,12 +11,17 @@ from terminotes.git_sync import GitSync
 from terminotes.storage import DB_FILENAME, Storage
 
 
-def _write_config(base_dir: Path) -> Path:
+def _write_config(base_dir: Path, *, site_title: str | None = None) -> Path:
     config_path = base_dir / "config.toml"
-    repo_url_line = 'git_remote_url = "file:///tmp/terminotes-notes.git"\n'
-    config_path.write_text(
-        (f'{repo_url_line}editor = "cat"\n').strip(), encoding="utf-8"
-    )
+    lines = [
+        'git_remote_url = "file:///tmp/terminotes-notes.git"',
+        'editor = "cat"',
+    ]
+    if site_title is not None:
+        lines.append("")
+        lines.append('[plugins."terminotes-builtin-html"]')
+        lines.append(f'site_title = "{site_title}"')
+    config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     repo_dir = base_dir / "notes-repo"
     (repo_dir / ".git").mkdir(parents=True)
     return config_path
@@ -40,7 +45,7 @@ def _seed_notes(repo_dir: Path) -> None:
 
 
 def test_export_html_creates_static_site(tmp_path: Path, monkeypatch) -> None:
-    config_path = _write_config(tmp_path)
+    config_path = _write_config(tmp_path, site_title="My Site")
     repo_dir = tmp_path / "notes-repo"
     _set_default_paths(config_path, monkeypatch)
 
@@ -56,8 +61,6 @@ def test_export_html_creates_static_site(tmp_path: Path, monkeypatch) -> None:
             "html",
             "--dest",
             str(output_dir),
-            "--site-title",
-            "My Site",
         ],
     )
 
