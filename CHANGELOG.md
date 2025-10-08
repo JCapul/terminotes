@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.6.2 - 2025-10-08
+
+- doc(readme): add version and download badges
+- feat(link): link command no longer add link URLs in note body
+
 ## 0.6.1 - 2025-10-06
 
 - chore(script): minor update on release script
