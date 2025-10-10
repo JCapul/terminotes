@@ -9,9 +9,6 @@ from pathlib import Path
 DEFAULT_CONFIG_DIR = Path("~/.config/terminotes").expanduser()
 DEFAULT_CONFIG_PATH = DEFAULT_CONFIG_DIR / "config.toml"
 DEFAULT_REPO_DIRNAME = "notes-repo"
-TEMPLATE_PACKAGE = "terminotes.templates.export.html"
-TEMPLATE_RELATIVE_DIR = Path("templates") / "export" / "html"
-TEMPLATE_FILES = ("index.html", "note.html", "styles.css", "search.js")
 
 
 class ConfigError(RuntimeError):

@@ -1,4 +1,4 @@
-"""Built-in Markdown exporter plugin for Terminotes."""
+"""Markdown export implementation for the built-in Terminotes plugin."""
 
 from __future__ import annotations
 
@@ -8,11 +8,8 @@ from typing import Any, Mapping
 
 import yaml
 
-from ....exporters import ExportError
-from ....plugins import BootstrapContext, ExportContribution, hookimpl
-from ....storage import NoteSnapshot, Storage
-
-PLUGIN_ID = "terminotes-builtin-markdown"
+from terminotes.exporters import ExportError
+from terminotes.storage import NoteSnapshot, Storage
 
 
 def _slugify(value: str) -> str:
@@ -38,7 +35,7 @@ class MarkdownExporter:
             filename = f"{note.id:04d}-{slug}.md"
             file_path = dest / filename
 
-            metadata = {
+            metadata: dict[str, Any] = {
                 "id": note.id,
                 "title": note.title or "",
                 "description": note.description or "",
@@ -65,47 +62,20 @@ class MarkdownExporter:
         return count
 
 
-def _collect_notes(storage: Storage) -> list[NoteSnapshot]:
-    return storage.snapshot_notes()
-
-
-def _export_markdown(
+def export_markdown(
     *,
     storage: Storage,
     destination: Path,
     options: Mapping[str, Any] | None = None,
 ) -> int:
+    _ = options  # markdown exporter currently ignores additional options
     exporter = MarkdownExporter()
     try:
-        return exporter.export(_collect_notes(storage), destination)
+        return exporter.export(storage.snapshot_notes(), destination)
     except ExportError:
         raise
     except Exception as exc:  # pragma: no cover - defensive
         raise ExportError(f"Markdown export failed: {exc}") from exc
 
 
-@hookimpl
-def bootstrap(context: BootstrapContext) -> None:  # pragma: no cover - nothing to setup
-    """Markdown plugin currently has no bootstrap requirements."""
-
-    _ = context
-
-
-@hookimpl
-def export_formats() -> tuple[ExportContribution, ...]:
-    """Expose the built-in Markdown exporter as a plugin contribution."""
-
-    contribution = ExportContribution(
-        format_id="markdown",
-        formatter=_export_markdown,
-        description="Markdown files with YAML front matter",
-    )
-    return (contribution,)
-
-
-__all__ = [
-    "MarkdownExporter",
-    "PLUGIN_ID",
-    "bootstrap",
-    "export_formats",
-]
+__all__ = ["MarkdownExporter", "export_markdown"]

@@ -110,7 +110,7 @@ Below are the primary subcommands. Use `tn --help` and `tn <cmd> --help` for det
   - Divergence prompt choices: `local-wins`, `remote-wins`, or `abort`.
 
 - `export` — Render notes to a static site or Markdown files.
-  - HTML: `tn export --format html --dest ./site` (set the site title under `[plugins."terminotes-builtin-html"]`).
+  - HTML: `tn export --format html --dest ./site` (set the site title under `[plugins."terminotes-html-plugin"]`).
   - Markdown: `tn export --format markdown --dest ./markdown`
   - Outputs go into the destination directory, which is created if missing.
 
@@ -123,7 +123,7 @@ The config file is TOML and lives by default at `~/.config/terminotes/config.tom
 - `git_remote_url` (string, required): your notes repo remote URL.
 - `terminotes_dir` (string, optional): where the local repo lives; absolute or relative path. Default: `notes-repo` under the config directory.
 - `editor` (string, optional): command to launch when editing notes via `tn edit`.
-- Plugin configuration lives under `[plugins]`. For example, `[plugins."terminotes-builtin-html"]` allows overriding `site_title` and optionally `templates_root` for the HTML exporter.
+- Plugin configuration lives under `[plugins]`. For example, `[plugins."terminotes-html-plugin"]` allows overriding `site_title` and optionally `templates_root` for the HTML exporter.
 
 You can start from `config/config.sample.toml`.
 

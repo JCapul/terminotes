@@ -19,7 +19,7 @@ def _write_config(base_dir: Path, *, site_title: str | None = None) -> Path:
     ]
     if site_title is not None:
         lines.append("")
-        lines.append('[plugins."terminotes-builtin-html"]')
+        lines.append('[plugins."terminotes-html-plugin"]')
         lines.append(f'site_title = "{site_title}"')
     config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     repo_dir = base_dir / "notes-repo"

@@ -1,0 +1,36 @@
+"""Configuration helpers for the built-in Markdown exporter plugin."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from terminotes.plugins import BootstrapContext
+
+PLUGIN_ID = "terminotes-builtin-markdown"
+
+
+@dataclass(frozen=True)
+class MarkdownPluginConfig:
+    """Resolved configuration data for the Markdown exporter plugin."""
+
+    pass
+
+
+DEFAULT_CONFIG = MarkdownPluginConfig()
+
+
+def resolve_plugin_config(context: "BootstrapContext") -> MarkdownPluginConfig:
+    """Convert bootstrap context data into plugin configuration."""
+
+    _ = context  # markdown exporter has no runtime configuration yet
+    return DEFAULT_CONFIG
+
+
+__all__ = [
+    "DEFAULT_CONFIG",
+    "MarkdownPluginConfig",
+    "PLUGIN_ID",
+    "resolve_plugin_config",
+]

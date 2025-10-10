@@ -12,20 +12,23 @@ from . import (
     PluginRegistrationError,
     create_plugin_manager,
     get_load_errors,
+    html,
     iter_export_contributions,
+    markdown,
     register_modules,
     run_bootstrap_hooks,
 )
-from .builtin import BUILTIN_PLUGINS
 from .types import BootstrapContext, ExportContribution
 
 ContributionResult = Tuple[dict[str, ExportContribution], Tuple[PluginLoadError, ...]]
+
+_BUILTIN_PLUGIN_MODULES: Tuple[object, ...] = (html, markdown)
 
 
 def iter_plugin_modules() -> Tuple[object, ...]:
     """Return plugin modules bundled with Terminotes."""
 
-    return BUILTIN_PLUGINS
+    return _BUILTIN_PLUGIN_MODULES
 
 
 @lru_cache(maxsize=1)
