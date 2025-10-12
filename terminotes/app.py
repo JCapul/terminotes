@@ -7,8 +7,7 @@ from pathlib import Path
 
 from .config import ConfigError, TerminotesConfig, load_config
 from .git_sync import GitSync
-from .plugins import BootstrapContext, build_settings_getter
-from .plugins.runtime import run_bootstrap
+from .plugins import BootstrapContext, build_settings_getter, run_bootstrap
 from .storage import DB_FILENAME, Storage
 
 

@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from terminotes.exporters import ExportError
 from terminotes.plugins import ExportContribution, hookimpl
-from terminotes.plugins import runtime as plugin_runtime
+from terminotes.plugins import manager as plugin_manager
 from terminotes.services import export as export_service
 from terminotes.storage import Storage
 
@@ -18,10 +18,10 @@ def reset_export_registry() -> None:
     """Ensure plugin discovery cache is cleared between tests."""
 
     export_service.clear_export_registry_cache()
-    plugin_runtime.reset_plugin_manager_cache()
+    plugin_manager.reset_plugin_manager_cache()
     yield
     export_service.clear_export_registry_cache()
-    plugin_runtime.reset_plugin_manager_cache()
+    plugin_manager.reset_plugin_manager_cache()
 
 
 def test_export_notes_invokes_custom_plugin(tmp_path: Path, monkeypatch) -> None:
@@ -53,13 +53,13 @@ def test_export_notes_invokes_custom_plugin(tmp_path: Path, monkeypatch) -> None
 
     module.export_formats = export_formats
 
-    original_iter = plugin_runtime.iter_plugin_modules
+    original_iter = plugin_manager.iter_plugin_modules
 
     def _combined() -> tuple[object, ...]:
         return original_iter() + (module,)
 
-    monkeypatch.setattr(plugin_runtime, "iter_plugin_modules", _combined)
-    plugin_runtime.reset_plugin_manager_cache()
+    monkeypatch.setattr(plugin_manager, "iter_plugin_modules", _combined)
+    plugin_manager.reset_plugin_manager_cache()
     export_service.clear_export_registry_cache()
 
     storage = Storage(tmp_path / "notes.db")
@@ -103,13 +103,13 @@ def test_export_notes_wraps_plugin_error(tmp_path: Path, monkeypatch) -> None:
 
     module.export_formats = export_formats
 
-    original_iter = plugin_runtime.iter_plugin_modules
+    original_iter = plugin_manager.iter_plugin_modules
 
     def _combined() -> tuple[object, ...]:
         return original_iter() + (module,)
 
-    monkeypatch.setattr(plugin_runtime, "iter_plugin_modules", _combined)
-    plugin_runtime.reset_plugin_manager_cache()
+    monkeypatch.setattr(plugin_manager, "iter_plugin_modules", _combined)
+    plugin_manager.reset_plugin_manager_cache()
     export_service.clear_export_registry_cache()
 
     storage = Storage(tmp_path / "notes.db")

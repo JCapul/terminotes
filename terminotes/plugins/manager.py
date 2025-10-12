@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Iterator, Sequence
+from functools import lru_cache
 from typing import Iterable as TypingIterable
+from typing import Tuple
 
 import pluggy
 
@@ -87,6 +89,63 @@ def load_plugin_entry_points(
     manager.load_setuptools_entrypoints(group)
 
 
+def iter_plugin_modules() -> Tuple[object, ...]:
+    """Return plugin modules bundled with Terminotes."""
+
+    return _builtin_plugin_modules()
+
+
+@lru_cache(maxsize=1)
+def _builtin_plugin_modules() -> Tuple[object, ...]:
+    from . import html, markdown
+
+    return (html, markdown)
+
+
+@lru_cache(maxsize=1)
+def _build_plugin_manager() -> pluggy.PluginManager:
+    manager = create_plugin_manager()
+    register_modules(manager, iter_plugin_modules())
+    return manager
+
+
+def get_plugin_manager() -> pluggy.PluginManager:
+    """Return the cached plugin manager instance."""
+
+    return _build_plugin_manager()
+
+
+def reset_plugin_manager_cache() -> None:
+    """Clear cached plugin manager so future calls rebuild state."""
+
+    _build_plugin_manager.cache_clear()
+    _builtin_plugin_modules.cache_clear()
+
+
+def load_export_contributions() -> dict[str, ExportContribution]:
+    """Collect exporter contributions from all registered plugins."""
+
+    manager = get_plugin_manager()
+
+    contributions: dict[str, ExportContribution] = {}
+    for contribution in iter_export_contributions(manager):
+        key = contribution.format_id.lower()
+        if key in contributions:
+            raise PluginRegistrationError(
+                f"Duplicate export format detected: '{contribution.format_id}'."
+            )
+        contributions[key] = contribution
+
+    return contributions
+
+
+def run_bootstrap(context: BootstrapContext) -> list[Exception]:
+    """Execute bootstrap hooks using the shared plugin manager."""
+
+    manager = get_plugin_manager()
+    return run_bootstrap_hooks(manager, context)
+
+
 def _ensure_iterable(
     contributions: object,
 ) -> TypingIterable[ExportContribution]:
@@ -115,8 +174,13 @@ def _ensure_iterable(
 __all__ = [
     "PluginRegistrationError",
     "create_plugin_manager",
+    "get_plugin_manager",
     "iter_export_contributions",
+    "iter_plugin_modules",
+    "load_export_contributions",
     "load_plugin_entry_points",
     "register_modules",
+    "reset_plugin_manager_cache",
+    "run_bootstrap",
     "run_bootstrap_hooks",
 ]
