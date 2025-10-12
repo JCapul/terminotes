@@ -19,7 +19,7 @@ Terminotes is a released Python CLI (current version 0.3.0) for jotting quick no
 - Use `snake_case` for functions/modules, `CapWords` for classes, and uppercase constants.
 - Type-hint public functions with simple built-in/typing annotations; avoid ornate generics.
 - Let `ruff` handle linting (`ruff check`) and formatting (`ruff format`); run via `uv run` or `just`.
-- Front matter helpers (`terminotes/notes_frontmatter.py`) must emit and parse YAML via `yaml.safe_dump`/`yaml.safe_load`; keep TOML code paths out of new contributions.
+- Front matter helpers (`terminotes/editor.py`) must emit and parse YAML via `yaml.safe_dump`/`yaml.safe_load`; keep TOML code paths out of new contributions.
 - HTML exports rely on Jinja2 templates in `terminotes/plugins/html/templates/`; use environment helpers in `terminotes/services/export.py` instead of manual string substitution.
 - Persist structured metadata through `Storage.create_note(..., extra_data=...)` and keep JSON payloads minimal and documented (link notes store `source_url` and `wayback` keys).
 

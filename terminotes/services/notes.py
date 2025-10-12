@@ -13,7 +13,7 @@ import httpx
 
 from ..app import AppContext
 from ..editor import open_editor as default_open_editor
-from ..notes_frontmatter import parse_document, render_document
+from ..editor import parse_document, render_document
 from ..storage import Note
 from ..utils.datetime_fmt import (
     now_user_friendly_local,

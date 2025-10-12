@@ -11,12 +11,12 @@ import yaml
 from click.testing import CliRunner
 from terminotes import cli
 from terminotes import config as config_module
-from terminotes.git_sync import GitSync
-from terminotes.notes_frontmatter import (
+from terminotes.editor import (
     FRONTMATTER_DELIM,
     parse_document,
     render_document,
 )
+from terminotes.git_sync import GitSync
 from terminotes.storage import DB_FILENAME, Storage
 
 
