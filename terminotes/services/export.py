@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
-from ..exporters import ExportError
 from ..plugins import (
     ExportContribution,
     PluginRegistrationError,
@@ -14,6 +13,10 @@ from ..plugins import (
     reset_plugin_manager_cache,
 )
 from ..storage import Storage
+
+
+class ExportError(RuntimeError):
+    """Raised when exporting notes fails."""
 
 
 @dataclass(frozen=True)

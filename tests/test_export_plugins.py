@@ -6,10 +6,10 @@ import types
 from pathlib import Path
 
 import pytest
-from terminotes.exporters import ExportError
 from terminotes.plugins import ExportContribution, hookimpl
 from terminotes.plugins import manager as plugin_manager
 from terminotes.services import export as export_service
+from terminotes.services.export import ExportError
 from terminotes.storage import Storage
 
 

@@ -12,7 +12,7 @@ from typing import Any
 from jinja2 import Environment, FileSystemLoader, TemplateNotFound, select_autoescape
 from markupsafe import Markup
 
-from terminotes.exporters import ExportError
+from terminotes.services.export import ExportError
 from terminotes.storage import NoteSnapshot
 
 from .config import DEFAULT_SITE_TITLE

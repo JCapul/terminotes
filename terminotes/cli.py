@@ -16,11 +16,14 @@ from .config import (
     bootstrap_config_file,
 )
 from .editor import EditorError, open_editor
-from .exporters import ExportError
 from .git_sync import GitSync, GitSyncError
 from .services.delete import delete_note as delete_note_workflow
+from .services.export import (
+    ExportError,
+    get_export_format_choices,
+    get_export_format_descriptions,
+)
 from .services.export import export_notes as run_export
-from .services.export import get_export_format_choices, get_export_format_descriptions
 from .services.notes import (
     create_link_entry,
     create_log_entry,

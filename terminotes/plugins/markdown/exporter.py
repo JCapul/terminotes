@@ -8,7 +8,7 @@ from typing import Any, Mapping
 
 import yaml
 
-from terminotes.exporters import ExportError
+from terminotes.services.export import ExportError
 from terminotes.storage import NoteSnapshot, Storage
 
 

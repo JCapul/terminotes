@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import Any, Mapping
 
 from terminotes.config import DEFAULT_CONFIG_DIR
-from terminotes.exporters import ExportError
 from terminotes.plugins import BootstrapContext, ExportContribution, hookimpl
+from terminotes.services.export import ExportError
 from terminotes.storage import NoteSnapshot, Storage
 
 from .config import (
