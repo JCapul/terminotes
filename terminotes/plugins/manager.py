@@ -47,24 +47,8 @@ class TerminotesPluginManager:
                 continue
             yield from _ensure_iterable(contributions)
 
-    def run_bootstrap(self, context: BootstrapContext) -> list[Exception]:
-        hook_caller = self._manager.hook.bootstrap
-        hook_impls = list(hook_caller.get_hookimpls())
-        if not hook_impls:
-            return []
-
-        plugins_in_order = [impl.plugin for impl in hook_impls]
-        errors: list[Exception] = []
-
-        for plugin in plugins_in_order:
-            others = [p for p in plugins_in_order if p is not plugin]
-            subset = self._manager.subset_hook_caller("bootstrap", others)
-            try:
-                subset(context=context)
-            except Exception as exc:  # pragma: no cover - defensive
-                errors.append(exc)
-
-        return errors
+    def run_bootstrap(self, context: BootstrapContext) -> None:
+        self._manager.hook.bootstrap(context=context)
 
 
 @lru_cache(maxsize=1)
@@ -102,7 +86,7 @@ def load_export_contributions() -> dict[str, ExportContribution]:
     return contributions
 
 
-def run_bootstrap(context: BootstrapContext) -> list[Exception]:
+def run_bootstrap(context: BootstrapContext) -> None:
     manager = get_plugin_manager()
     return manager.run_bootstrap(context)
 
