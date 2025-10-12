@@ -53,12 +53,12 @@ def test_export_notes_invokes_custom_plugin(tmp_path: Path, monkeypatch) -> None
 
     module.export_formats = export_formats
 
-    original_iter = plugin_manager.iter_plugin_modules
+    original_iter = plugin_manager._builtin_plugin_modules
 
     def _combined() -> tuple[object, ...]:
         return original_iter() + (module,)
 
-    monkeypatch.setattr(plugin_manager, "iter_plugin_modules", _combined)
+    monkeypatch.setattr(plugin_manager, "_builtin_plugin_modules", _combined)
     plugin_manager.reset_plugin_manager_cache()
     export_service.clear_export_registry_cache()
 
@@ -103,12 +103,12 @@ def test_export_notes_wraps_plugin_error(tmp_path: Path, monkeypatch) -> None:
 
     module.export_formats = export_formats
 
-    original_iter = plugin_manager.iter_plugin_modules
+    original_iter = plugin_manager._builtin_plugin_modules
 
     def _combined() -> tuple[object, ...]:
         return original_iter() + (module,)
 
-    monkeypatch.setattr(plugin_manager, "iter_plugin_modules", _combined)
+    monkeypatch.setattr(plugin_manager, "_builtin_plugin_modules", _combined)
     plugin_manager.reset_plugin_manager_cache()
     export_service.clear_export_registry_cache()
 

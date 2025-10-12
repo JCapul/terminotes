@@ -18,81 +18,53 @@ class PluginRegistrationError(RuntimeError):
     """Raised when a plugin fails validation or registration."""
 
 
-def create_plugin_manager(*, load_entry_points: bool = True) -> pluggy.PluginManager:
-    """Instantiate a pluggy ``PluginManager`` configured for Terminotes."""
+class TerminotesPluginManager:
+    """Wrapper around pluggy's ``PluginManager`` with Terminotes defaults."""
 
-    manager = pluggy.PluginManager(PLUGIN_NAMESPACE)
-    manager.add_hookspecs(TerminotesHookSpec)
+    def __init__(self, *, load_entry_points: bool = True) -> None:
+        self._manager = pluggy.PluginManager(PLUGIN_NAMESPACE)
+        self._manager.add_hookspecs(TerminotesHookSpec)
+        if load_entry_points:
+            self.load_entry_points()
 
-    if load_entry_points:
-        load_plugin_entry_points(manager)
+    @property
+    def manager(self) -> pluggy.PluginManager:
+        return self._manager
 
-    return manager
+    def register_modules(self, modules: Sequence[object]) -> None:
+        for module in modules:
+            try:
+                self._manager.register(module)
+            except pluggy.PluginValidationError as exc:  # pragma: no cover - defensive
+                raise PluginRegistrationError(str(exc)) from exc
 
+    def load_entry_points(self, group: str = ENTRY_POINT_GROUP) -> None:
+        self._manager.load_setuptools_entrypoints(group)
 
-def register_modules(
-    manager: pluggy.PluginManager,
-    modules: Sequence[object],
-) -> None:
-    """Register in-process plugin modules with the manager."""
+    def iter_export_contributions(self) -> Iterator[ExportContribution]:
+        for contributions in self._manager.hook.export_formats():
+            if not contributions:
+                continue
+            yield from _ensure_iterable(contributions)
 
-    for module in modules:
-        try:
-            manager.register(module)
-        except pluggy.PluginValidationError as exc:  # pragma: no cover - defensive
-            raise PluginRegistrationError(str(exc)) from exc
+    def run_bootstrap(self, context: BootstrapContext) -> list[Exception]:
+        hook_caller = self._manager.hook.bootstrap
+        hook_impls = list(hook_caller.get_hookimpls())
+        if not hook_impls:
+            return []
 
+        plugins_in_order = [impl.plugin for impl in hook_impls]
+        errors: list[Exception] = []
 
-def iter_export_contributions(
-    manager: pluggy.PluginManager,
-) -> Iterator[ExportContribution]:
-    """Yield export format contributions from all registered plugins."""
+        for plugin in plugins_in_order:
+            others = [p for p in plugins_in_order if p is not plugin]
+            subset = self._manager.subset_hook_caller("bootstrap", others)
+            try:
+                subset(context=context)
+            except Exception as exc:  # pragma: no cover - defensive
+                errors.append(exc)
 
-    for contributions in manager.hook.export_formats():
-        if not contributions:
-            continue
-        yield from _ensure_iterable(contributions)
-
-
-def run_bootstrap_hooks(
-    manager: pluggy.PluginManager,
-    context: BootstrapContext,
-) -> list[Exception]:
-    """Execute bootstrap hooks, collecting exceptions per plugin."""
-
-    hook_caller = manager.hook.bootstrap
-    hook_impls = list(hook_caller.get_hookimpls())
-    if not hook_impls:
-        return []
-
-    plugins_in_order = [impl.plugin for impl in hook_impls]
-    errors: list[Exception] = []
-
-    for plugin in plugins_in_order:
-        others = [p for p in plugins_in_order if p is not plugin]
-        subset = manager.subset_hook_caller("bootstrap", others)
-        try:
-            subset(context=context)
-        except Exception as exc:  # pragma: no cover - defensive
-            errors.append(exc)
-
-    return errors
-
-
-def load_plugin_entry_points(
-    manager: pluggy.PluginManager,
-    *,
-    group: str = ENTRY_POINT_GROUP,
-) -> None:
-    """Load plugin entry points via ``importlib.metadata`` integration."""
-
-    manager.load_setuptools_entrypoints(group)
-
-
-def iter_plugin_modules() -> Tuple[object, ...]:
-    """Return plugin modules bundled with Terminotes."""
-
-    return _builtin_plugin_modules()
+        return errors
 
 
 @lru_cache(maxsize=1)
@@ -103,47 +75,36 @@ def _builtin_plugin_modules() -> Tuple[object, ...]:
 
 
 @lru_cache(maxsize=1)
-def _build_plugin_manager() -> pluggy.PluginManager:
-    manager = create_plugin_manager()
-    register_modules(manager, iter_plugin_modules())
+def _shared_plugin_manager() -> TerminotesPluginManager:
+    manager = TerminotesPluginManager()
+    manager.register_modules(_builtin_plugin_modules())
     return manager
 
 
-def get_plugin_manager() -> pluggy.PluginManager:
-    """Return the cached plugin manager instance."""
-
-    return _build_plugin_manager()
+def get_plugin_manager() -> TerminotesPluginManager:
+    return _shared_plugin_manager()
 
 
 def reset_plugin_manager_cache() -> None:
-    """Clear cached plugin manager so future calls rebuild state."""
-
-    _build_plugin_manager.cache_clear()
-    _builtin_plugin_modules.cache_clear()
+    _shared_plugin_manager.cache_clear()
 
 
 def load_export_contributions() -> dict[str, ExportContribution]:
-    """Collect exporter contributions from all registered plugins."""
-
     manager = get_plugin_manager()
-
     contributions: dict[str, ExportContribution] = {}
-    for contribution in iter_export_contributions(manager):
+    for contribution in manager.iter_export_contributions():
         key = contribution.format_id.lower()
         if key in contributions:
             raise PluginRegistrationError(
                 f"Duplicate export format detected: '{contribution.format_id}'."
             )
         contributions[key] = contribution
-
     return contributions
 
 
 def run_bootstrap(context: BootstrapContext) -> list[Exception]:
-    """Execute bootstrap hooks using the shared plugin manager."""
-
     manager = get_plugin_manager()
-    return run_bootstrap_hooks(manager, context)
+    return manager.run_bootstrap(context)
 
 
 def _ensure_iterable(
@@ -173,14 +134,9 @@ def _ensure_iterable(
 
 __all__ = [
     "PluginRegistrationError",
-    "create_plugin_manager",
+    "TerminotesPluginManager",
     "get_plugin_manager",
-    "iter_export_contributions",
-    "iter_plugin_modules",
     "load_export_contributions",
-    "load_plugin_entry_points",
-    "register_modules",
     "reset_plugin_manager_cache",
     "run_bootstrap",
-    "run_bootstrap_hooks",
 ]
