@@ -7,7 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from ..exporters import ExportError
-from ..plugins import ExportContribution, PluginLoadError, PluginRegistrationError
+from ..plugins import ExportContribution, PluginRegistrationError
 from ..plugins.runtime import load_export_contributions, reset_plugin_manager_cache
 from ..storage import Storage
 
@@ -17,13 +17,12 @@ class ExportRegistry:
     """Aggregated exporter contributions discovered at runtime."""
 
     contributions: dict[str, ExportContribution]
-    load_errors: tuple[PluginLoadError, ...]
 
 
 @lru_cache(maxsize=1)
 def _load_export_registry() -> ExportRegistry:
-    contributions, load_errors = load_export_contributions()
-    return ExportRegistry(contributions=contributions, load_errors=load_errors)
+    contributions = load_export_contributions()
+    return ExportRegistry(contributions=contributions)
 
 
 def clear_export_registry_cache() -> None:
@@ -69,16 +68,11 @@ def export_notes(
     contribution = formats.get(format_lower)
     if contribution is None:
         available = ", ".join(sorted(formats))
-        load_hint = ""
-        if registry.load_errors:
-            failed = ", ".join(error.name for error in registry.load_errors)
-            load_hint = f" (plugins failed to load: {failed})"
         if available:
-            message = f"Unknown export format: {export_format}. Available: {available}."
-            if load_hint:
-                message += load_hint
-            raise ExportError(message)
-        raise ExportError("No export plugins are available." + load_hint)
+            raise ExportError(
+                f"Unknown export format: {export_format}. Available: {available}."
+            )
+        raise ExportError("No export plugins are available.")
 
     try:
         return contribution.formatter(

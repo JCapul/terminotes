@@ -8,10 +8,8 @@ from typing import Tuple
 import pluggy
 
 from . import (
-    PluginLoadError,
     PluginRegistrationError,
     create_plugin_manager,
-    get_load_errors,
     html,
     iter_export_contributions,
     markdown,
@@ -19,8 +17,6 @@ from . import (
     run_bootstrap_hooks,
 )
 from .types import BootstrapContext, ExportContribution
-
-ContributionResult = Tuple[dict[str, ExportContribution], Tuple[PluginLoadError, ...]]
 
 _BUILTIN_PLUGIN_MODULES: Tuple[object, ...] = (html, markdown)
 
@@ -50,8 +46,8 @@ def reset_plugin_manager_cache() -> None:
     _build_plugin_manager.cache_clear()
 
 
-def load_export_contributions() -> ContributionResult:
-    """Collect exporter contributions and associated load errors."""
+def load_export_contributions() -> dict[str, ExportContribution]:
+    """Collect exporter contributions from all registered plugins."""
 
     manager = get_plugin_manager()
 
@@ -64,7 +60,7 @@ def load_export_contributions() -> ContributionResult:
             )
         contributions[key] = contribution
 
-    return contributions, tuple(get_load_errors(manager))
+    return contributions
 
 
 def run_bootstrap(context: BootstrapContext) -> list[Exception]:
