@@ -70,11 +70,15 @@ def cli(ctx: click.Context, config_path_opt: Path | None) -> None:
         click.echo(ctx.command.get_help(ctx))
         ctx.exit(0)
 
-    # Persist the selected config path for subcommands like 'config'
     ctx.obj["config_path"] = config_path_opt
 
-    if invoked == "config":
-        return
+
+def _get_app(ctx: click.Context) -> AppContext:
+    app = ctx.obj.get("app")
+    if app is not None:
+        return app
+
+    config_path_opt: Path | None = ctx.obj.get("config_path")
 
     try:
         app = bootstrap(config_path_opt, missing_hint=True)
@@ -83,10 +87,10 @@ def cli(ctx: click.Context, config_path_opt: Path | None) -> None:
             "Configuration not found. Run 'tn config' once to set up Terminotes."
         ) from exc
     except (ConfigError, GitSyncError, StorageError) as exc:  # pragma: no cover
-        # Preserve original behaviour: map to Click exception wrapper.
         raise TerminotesCliError(str(exc)) from exc
 
     ctx.obj["app"] = app
+    return app
 
 
 @cli.command(name="edit")
@@ -112,7 +116,7 @@ def edit(ctx: click.Context, note_id: int | None, edit_last: bool) -> None:
     By default, creates a new note. Use --id to edit an existing note.
     """
 
-    app: AppContext = ctx.obj["app"]
+    app: AppContext = _get_app(ctx)
 
     if note_id is not None and edit_last:
         raise TerminotesCliError("Use only one of --id or --last.")
@@ -175,7 +179,7 @@ def log(
     Usage: tn log -- This is a log entry
     """
 
-    app: AppContext = ctx.obj["app"]
+    app: AppContext = _get_app(ctx)
 
     body = " ".join(content).strip()
     if not body:
@@ -226,7 +230,7 @@ def link(
 ) -> None:
     """Capture a URL with optional comment and Wayback fallback."""
 
-    app: AppContext = ctx.obj["app"]
+    app: AppContext = _get_app(ctx)
     comment_text = " ".join(comment).strip()
 
     created_at = None
@@ -269,7 +273,7 @@ def link(
 def delete(ctx: click.Context, note_id: int, assume_yes: bool) -> None:
     """Delete a note identified by NOTE_ID from the database."""
 
-    app: AppContext = ctx.obj["app"]
+    app: AppContext = _get_app(ctx)
     if not assume_yes:
         confirm = click.confirm(
             f"Delete note {note_id}?", default=False, show_default=True
@@ -292,7 +296,7 @@ def delete(ctx: click.Context, note_id: int, assume_yes: bool) -> None:
 def prune(ctx: click.Context) -> None:
     """Remove unused tags and stale tag associations from the database."""
 
-    app: AppContext = ctx.obj["app"]
+    app: AppContext = _get_app(ctx)
     try:
         prune_result: PruneResult = prune_unused_workflow(app)
     except (StorageError, GitSyncError) as exc:
@@ -321,7 +325,7 @@ def sync(ctx: click.Context, dry_run: bool) -> None:
     and pushes with the appropriate strategy. Requires a clean working tree.
     """
 
-    app: AppContext = ctx.obj["app"]
+    app: AppContext = _get_app(ctx)
     git_sync: GitSync = app.git_sync
 
     if git_sync is None or not git_sync.is_valid_repo():
@@ -428,7 +432,7 @@ def config(ctx: click.Context) -> None:
 def ls(ctx: click.Context, limit: int, reverse: bool, tags: tuple[str, ...]) -> None:
     """List the most recent notes (by last edit time)."""
 
-    app: AppContext = ctx.obj["app"]
+    app: AppContext = _get_app(ctx)
     storage: Storage = app.storage
 
     try:
@@ -473,7 +477,7 @@ def search(
 ) -> None:
     """Search notes for a pattern (case-insensitive substring)."""
 
-    app: AppContext = ctx.obj["app"]
+    app: AppContext = _get_app(ctx)
     storage: Storage = app.storage
 
     pat = (pattern or "").strip()
@@ -524,7 +528,7 @@ def search(
 def export(ctx: click.Context, export_format: str, destination: Path) -> None:
     """Export notes using the selected exporter plugin."""
 
-    app: AppContext = ctx.obj["app"]
+    app: AppContext = _get_app(ctx)
 
     if destination.exists() and destination.is_file():
         raise TerminotesCliError("Destination must be a directory path.")
@@ -546,7 +550,7 @@ def export(ctx: click.Context, export_format: str, destination: Path) -> None:
 def info(ctx: click.Context) -> None:
     """Display repository information and current configuration."""
 
-    app: AppContext = ctx.obj["app"]
+    app: AppContext = _get_app(ctx)
     config: TerminotesConfig = app.config
     storage: Storage = app.storage
 
@@ -612,6 +616,7 @@ def _format_config(config: TerminotesConfig) -> str:
         return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
     lines = [
+        "[terminotes]",
         f"git_remote_url = {quote(config.git_remote_url)}",
         f"terminotes_dir = {quote(str(config.terminotes_dir))}",
         f"editor = {quote(config.editor)}",

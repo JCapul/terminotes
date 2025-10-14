@@ -23,6 +23,7 @@ def test_terminotes_dir_defaults_to_config_dir(tmp_path: Path) -> None:
     config_path = write_config(
         tmp_path / "nested",
         """
+        [terminotes]
         git_remote_url = "git@example:notes.git"
         """,
     )
@@ -36,6 +37,7 @@ def test_load_config_success(tmp_path: Path) -> None:
     config_path = write_config(
         tmp_path,
         """
+        [terminotes]
         editor = "nvim"
         git_remote_url = "git@example:notes.git"
         """,
@@ -60,6 +62,7 @@ def test_git_remote_url_is_required(tmp_path: Path) -> None:
     config_path = write_config(
         tmp_path,
         """
+        [terminotes]
         """,
     )
     with pytest.raises(InvalidConfigError):
@@ -69,8 +72,23 @@ def test_git_remote_url_is_required(tmp_path: Path) -> None:
     config_path = write_config(
         tmp_path,
         """
+        [terminotes]
         git_remote_url = "  "
         """,
     )
+    with pytest.raises(InvalidConfigError):
+        load_config(config_path)
+
+
+def test_terminotes_section_is_required(tmp_path: Path) -> None:
+    config_path = write_config(
+        tmp_path,
+        """
+        git_remote_url = "git@example:legacy.git"
+        terminotes_dir = "legacy-notes"
+        editor = "nano"
+        """,
+    )
+
     with pytest.raises(InvalidConfigError):
         load_config(config_path)

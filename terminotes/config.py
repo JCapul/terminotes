@@ -61,13 +61,21 @@ def load_config(path: Path | None = None) -> TerminotesConfig:
     with config_path.open("rb") as fh:
         raw = tomllib.load(fh)
 
+    if not isinstance(raw, dict):
+        raise InvalidConfigError("Configuration root must be a TOML table")
+
+    terminotes_section = raw.get("terminotes")
+    if not isinstance(terminotes_section, dict):
+        raise InvalidConfigError("'terminotes' section is required and must be a table")
+    config_raw = terminotes_section
+
     base_dir = config_path.parent if path is not None else DEFAULT_CONFIG_DIR
     config_dir = base_dir.expanduser()
 
     # Allow users to override where the notes repository lives via
     # `terminotes_dir`. The path may be absolute or relative; relative paths
     # are resolved against the configuration directory.
-    repo_path_raw = raw.get("terminotes_dir")
+    repo_path_raw = config_raw.get("terminotes_dir")
     if repo_path_raw is None:
         terminotes_dir = (config_dir / DEFAULT_REPO_DIRNAME).expanduser().resolve()
     elif isinstance(repo_path_raw, str):
@@ -80,14 +88,14 @@ def load_config(path: Path | None = None) -> TerminotesConfig:
     else:
         raise InvalidConfigError("'terminotes_dir' must be a string when provided")
 
-    git_remote_url_raw = raw.get("git_remote_url")
+    git_remote_url_raw = config_raw.get("git_remote_url")
     if not isinstance(git_remote_url_raw, str):
         raise InvalidConfigError("'git_remote_url' is required and must be a string")
     git_remote_url = git_remote_url_raw.strip()
     if not git_remote_url:
         raise InvalidConfigError("'git_remote_url' must be a non-empty string")
 
-    editor = raw.get("editor")
+    editor = config_raw.get("editor")
     if editor is not None and not isinstance(editor, str):
         raise InvalidConfigError("'editor' must be a string when provided")
 
@@ -111,6 +119,7 @@ def bootstrap_config_file(path: Path) -> bool:
     config_dir = path.parent
     config_dir.mkdir(parents=True, exist_ok=True)
     default_content = (
+        "[terminotes]\n"
         'git_remote_url = "file:///path/to/notes.git"\n'
         'terminotes_dir = "notes-repo"\n'
         'editor = "vim"\n'

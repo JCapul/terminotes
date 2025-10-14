@@ -43,12 +43,13 @@ tn config
 This bootstraps a TOML file (default `~/.config/terminotes/config.toml`). Update it to point to your notes repo and editor. Minimal example:
 
 ```toml
+[terminotes]
 git_remote_url = "git@github.com:you/terminotes-notes.git"
 terminotes_dir = "notes-repo"  # absolute or relative to the config dir
 editor = "vim"
 ```
 
-Important: `git_remote_url` is required. Terminotes ensures a local clone exists under `terminotes_dir` and stores the SQLite DB there.
+Important: `git_remote_url` is required (under the `[terminotes]` table). Terminotes ensures a local clone exists under `terminotes_dir` and stores the SQLite DB there.
 
 2) Capture a first note:
 

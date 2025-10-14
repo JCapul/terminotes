@@ -15,11 +15,13 @@ from terminotes.utils.datetime_fmt import parse_user_datetime
 
 def _write_config(base_dir: Path) -> Path:
     config_path = base_dir / "config.toml"
-    repo_url_line = 'git_remote_url = "file:///tmp/terminotes-notes.git"\n'
-    config_path.write_text(
-        (f'{repo_url_line}editor = "cat"\nterminotes_dir = "notes-repo"\n').strip(),
-        encoding="utf-8",
-    )
+    content_lines = [
+        "[terminotes]",
+        'git_remote_url = "file:///tmp/terminotes-notes.git"',
+        'terminotes_dir = "notes-repo"',
+        'editor = "cat"',
+    ]
+    config_path.write_text("\n".join(content_lines) + "\n", encoding="utf-8")
     (base_dir / "notes-repo" / ".git").mkdir(parents=True)
     return config_path
 

@@ -14,13 +14,18 @@ from terminotes.storage import DB_FILENAME, Storage
 def _write_config(base_dir: Path, *, site_title: str | None = None) -> Path:
     config_path = base_dir / "config.toml"
     lines = [
+        "[terminotes]",
         'git_remote_url = "file:///tmp/terminotes-notes.git"',
         'editor = "cat"',
     ]
     if site_title is not None:
-        lines.append("")
-        lines.append('[plugins."terminotes-html-plugin"]')
-        lines.append(f'site_title = "{site_title}"')
+        lines.extend(
+            [
+                "",
+                '[plugins."terminotes-html-plugin"]',
+                f'site_title = "{site_title}"',
+            ]
+        )
     config_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     repo_dir = base_dir / "notes-repo"
     (repo_dir / ".git").mkdir(parents=True)
