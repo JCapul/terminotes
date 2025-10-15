@@ -9,15 +9,17 @@ from terminotes.config import TerminotesConfig
 from terminotes.plugins import ExportContribution, hookimpl
 from terminotes.storage import Storage
 
-from .config import PLUGIN_ID, resolve_plugin_config
 from .exporter import export_markdown
+
+PLUGIN_ID = "terminotes-builtin-markdown"
 
 
 @hookimpl
 def bootstrap(config: TerminotesConfig) -> None:  # pragma: no cover - nothing to setup
     """Markdown plugin currently has no bootstrap requirements."""
 
-    resolve_plugin_config(config)
+    # Access the mapping to highlight where plugin-specific settings would live.
+    config.plugins.get(PLUGIN_ID, {})
 
 
 @hookimpl
