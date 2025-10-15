@@ -7,7 +7,7 @@ from pathlib import Path
 
 from .config import ConfigError, TerminotesConfig, load_config
 from .git_sync import GitSync
-from .plugins import BootstrapContext, build_settings_getter, run_bootstrap
+from .plugins import run_bootstrap
 from .storage import DB_FILENAME, Storage
 
 
@@ -33,11 +33,8 @@ def bootstrap(config_path: Path | None, *, missing_hint: bool = False) -> AppCon
     storage = Storage(config.terminotes_dir / DB_FILENAME)
     storage.initialize()
 
-    bootstrap_context = BootstrapContext(
-        config=config, get_settings=build_settings_getter(config)
-    )
     try:
-        run_bootstrap(bootstrap_context)
+        run_bootstrap(config)
     except Exception as exc:  # pragma: no cover - defensive
         raise ConfigError(f"Plugin bootstrap failed: {exc}") from exc
 

@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 DEFAULT_CONFIG_DIR = Path("~/.config/terminotes").expanduser()
 DEFAULT_CONFIG_PATH = DEFAULT_CONFIG_DIR / "config.toml"
@@ -34,6 +35,7 @@ class TerminotesConfig:
     git_remote_url: str
     terminotes_dir: Path
     editor: str | None = None
+    plugins: dict[str, dict[str, Any]] = field(default_factory=dict)
     source_path: Path | None = None
 
 
@@ -99,10 +101,22 @@ def load_config(path: Path | None = None) -> TerminotesConfig:
     if editor is not None and not isinstance(editor, str):
         raise InvalidConfigError("'editor' must be a string when provided")
 
+    plugins_section = raw.get("plugins")
+    plugins: dict[str, dict[str, Any]] = {}
+    if isinstance(plugins_section, dict):
+        for key, value in plugins_section.items():
+            if not isinstance(key, str):  # pragma: no cover - defensive
+                continue
+            if isinstance(value, dict):
+                plugins[key] = dict(value)
+            else:
+                plugins[key] = {}
+
     return TerminotesConfig(
         git_remote_url=git_remote_url,
         terminotes_dir=terminotes_dir,
         editor=editor,
+        plugins=plugins,
         source_path=config_path,
     )
 

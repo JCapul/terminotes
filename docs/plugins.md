@@ -36,10 +36,10 @@ export formats. The plugin manager lives in `terminotes.plugins` and exposes the
 Terminotes currently defines two hook specifications in
 `terminotes.plugins.spec`:
 
-- `bootstrap(context)` lets a plugin execute setup logic during
-  `terminotes.app.bootstrap`. The `BootstrapContext` exposes the loaded
-  `TerminotesConfig` and a `get_settings(plugin_id)` helper for plugin-specific
-  configuration blocks.
+- `bootstrap(config)` lets a plugin execute setup logic during
+  `terminotes.app.bootstrap`. The hook receives the loaded `TerminotesConfig`,
+  including the parsed `[plugins]` mapping for plugin-specific configuration
+  blocks.
 - `export_formats()` returns an iterable of `ExportContribution` descriptors.
   The `formatter` callable receives keyword arguments `storage`, `destination`,
   and optional `options`, writing notes to disk and returning the note count.
@@ -52,10 +52,8 @@ signatures.
 Plugin settings live under a `[plugins]` table in the main Terminotes TOML file.
 Each plugin should claim a unique nested table—usually the package name. For
 example, a plugin named `terminotes-export-aurora` would read from the section
-`[plugins."terminotes-export-aurora"]`. The helper
-`terminotes.plugins.build_settings_getter(config)` returns a callable that
-retrieves these mappings as immutable dictionaries and supports providing
-defaults when the section is absent.
+`[plugins."terminotes-export-aurora"]`. During bootstrap or export logic, plugins
+can access their configuration with `config.plugins.get(<plugin-id>, {})`.
 
 ## Built-in exporters
 

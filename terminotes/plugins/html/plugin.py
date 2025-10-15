@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Mapping
 
-from terminotes.config import DEFAULT_CONFIG_DIR
-from terminotes.plugins import BootstrapContext, ExportContribution, hookimpl
+from terminotes.config import DEFAULT_CONFIG_DIR, TerminotesConfig
+from terminotes.plugins import ExportContribution, hookimpl
 from terminotes.services.export import ExportError
 from terminotes.storage import NoteSnapshot, Storage
 
@@ -49,11 +49,11 @@ def _export_html(
 
 
 @hookimpl
-def bootstrap(context: BootstrapContext) -> None:
+def bootstrap(config: TerminotesConfig) -> None:
     """Capture configuration and ensure templates before exporters run."""
 
     global _current_config
-    plugin_config = resolve_plugin_config(context)
+    plugin_config = resolve_plugin_config(config)
     ensure_templates(plugin_config.templates_root)
     _current_config = plugin_config
 

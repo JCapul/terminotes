@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from terminotes.plugins import BootstrapContext
+    from terminotes.config import TerminotesConfig
 
 PLUGIN_ID = "terminotes-builtin-markdown"
 
@@ -21,10 +21,10 @@ class MarkdownPluginConfig:
 DEFAULT_CONFIG = MarkdownPluginConfig()
 
 
-def resolve_plugin_config(context: "BootstrapContext") -> MarkdownPluginConfig:
-    """Convert bootstrap context data into plugin configuration."""
+def resolve_plugin_config(config: "TerminotesConfig") -> MarkdownPluginConfig:
+    """Convert configuration data into plugin configuration."""
 
-    _ = context  # markdown exporter has no runtime configuration yet
+    _ = config  # markdown exporter has no runtime configuration yet
     return DEFAULT_CONFIG
 
 

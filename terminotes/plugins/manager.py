@@ -9,9 +9,10 @@ from typing import Tuple
 
 import pluggy
 
+from ..config import TerminotesConfig
 from ._markers import ENTRY_POINT_GROUP, PLUGIN_NAMESPACE
 from .spec import TerminotesHookSpec
-from .types import BootstrapContext, ExportContribution
+from .types import ExportContribution
 
 
 class PluginRegistrationError(RuntimeError):
@@ -47,8 +48,8 @@ class TerminotesPluginManager:
                 continue
             yield from _ensure_iterable(contributions)
 
-    def run_bootstrap(self, context: BootstrapContext) -> None:
-        self._manager.hook.bootstrap(context=context)
+    def run_bootstrap(self, config: TerminotesConfig) -> None:
+        self._manager.hook.bootstrap(config=config)
 
 
 @lru_cache(maxsize=1)
@@ -86,9 +87,9 @@ def load_export_contributions() -> dict[str, ExportContribution]:
     return contributions
 
 
-def run_bootstrap(context: BootstrapContext) -> None:
+def run_bootstrap(config: TerminotesConfig) -> None:
     manager = get_plugin_manager()
-    return manager.run_bootstrap(context)
+    return manager.run_bootstrap(config)
 
 
 def _ensure_iterable(

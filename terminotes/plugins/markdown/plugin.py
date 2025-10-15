@@ -5,7 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Mapping
 
-from terminotes.plugins import BootstrapContext, ExportContribution, hookimpl
+from terminotes.config import TerminotesConfig
+from terminotes.plugins import ExportContribution, hookimpl
 from terminotes.storage import Storage
 
 from .config import PLUGIN_ID, resolve_plugin_config
@@ -13,10 +14,10 @@ from .exporter import export_markdown
 
 
 @hookimpl
-def bootstrap(context: BootstrapContext) -> None:  # pragma: no cover - nothing to setup
+def bootstrap(config: TerminotesConfig) -> None:  # pragma: no cover - nothing to setup
     """Markdown plugin currently has no bootstrap requirements."""
 
-    resolve_plugin_config(context)
+    resolve_plugin_config(config)
 
 
 @hookimpl

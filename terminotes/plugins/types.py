@@ -7,7 +7,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Mapping, Protocol
 
 if TYPE_CHECKING:  # pragma: no cover - type check only
-    from ..config import TerminotesConfig
     from ..storage import Storage
 
 
@@ -31,23 +30,3 @@ class ExportContribution:
     format_id: str
     formatter: ExportHandler
     description: str
-
-
-class PluginSettingsGetter(Protocol):
-    """Callable returning plugin-specific configuration mappings."""
-
-    def __call__(
-        self,
-        plugin_id: str,
-        *,
-        default: Mapping[str, Any] | None = None,
-    ) -> Mapping[str, Any]:  # pragma: no cover - Protocol
-        """Return the configuration for ``plugin_id`` or ``default`` when missing."""
-
-
-@dataclass(slots=True, frozen=True)
-class BootstrapContext:
-    """Data passed to exporter plugins during Terminotes bootstrap."""
-
-    config: "TerminotesConfig"
-    get_settings: PluginSettingsGetter

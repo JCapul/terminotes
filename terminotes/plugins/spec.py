@@ -4,15 +4,17 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from terminotes.config import TerminotesConfig
+
 from ._markers import hookspec
-from .types import BootstrapContext, ExportContribution
+from .types import ExportContribution
 
 
 class TerminotesHookSpec:
     """Collection of pluggy hook specifications."""
 
     @hookspec
-    def bootstrap(self, context: BootstrapContext) -> None:
+    def bootstrap(self, config: TerminotesConfig) -> None:
         """Run setup tasks during Terminotes bootstrap."""
 
     @hookspec

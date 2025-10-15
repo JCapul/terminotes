@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from ._markers import ENTRY_POINT_GROUP, PLUGIN_NAMESPACE, hookimpl, hookspec
-from .config import build_settings_getter
 from .manager import (
     PluginRegistrationError,
     TerminotesPluginManager,
@@ -12,17 +11,14 @@ from .manager import (
     reset_plugin_manager_cache,
     run_bootstrap,
 )
-from .types import BootstrapContext, ExportContribution, PluginSettingsGetter
+from .types import ExportContribution
 
 __all__ = [
-    "BootstrapContext",
     "ExportContribution",
     "ENTRY_POINT_GROUP",
     "PLUGIN_NAMESPACE",
     "PluginRegistrationError",
-    "PluginSettingsGetter",
     "TerminotesPluginManager",
-    "build_settings_getter",
     "get_plugin_manager",
     "hookimpl",
     "hookspec",

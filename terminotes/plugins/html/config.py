@@ -7,7 +7,7 @@ from importlib import resources
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from terminotes.config import DEFAULT_CONFIG_DIR
+from terminotes.config import DEFAULT_CONFIG_DIR, TerminotesConfig
 
 PLUGIN_ID = "terminotes-html-plugin"
 
@@ -16,7 +16,7 @@ TEMPLATE_RELATIVE_DIR = Path(PLUGIN_ID) / "templates"
 TEMPLATE_FILES = ("index.html", "note.html", "styles.css", "search.js")
 
 if TYPE_CHECKING:
-    from terminotes.plugins import BootstrapContext
+    from terminotes.config import TerminotesConfig
 DEFAULT_SITE_TITLE = "Terminotes"
 
 
@@ -46,16 +46,16 @@ def ensure_templates(config_dir: Path) -> None:
         target_path.write_text(data, encoding="utf-8")
 
 
-def resolve_plugin_config(context: "BootstrapContext") -> HtmlPluginConfig:
-    """Convert bootstrap context data into plugin configuration."""
+def resolve_plugin_config(config: "TerminotesConfig") -> HtmlPluginConfig:
+    """Convert configuration data into plugin configuration."""
 
     config_dir = (
-        context.config.source_path.parent
-        if context.config.source_path is not None
+        config.source_path.parent
+        if config.source_path is not None
         else DEFAULT_CONFIG_DIR
     )
 
-    raw_settings = context.get_settings(PLUGIN_ID, default={})
+    raw_settings = config.plugins.get(PLUGIN_ID, {})
 
     site_title_raw = raw_settings.get("site_title", DEFAULT_SITE_TITLE)
     site_title = str(site_title_raw).strip() or DEFAULT_SITE_TITLE
