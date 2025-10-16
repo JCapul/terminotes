@@ -18,8 +18,14 @@ from .config import (
 from .editor import EditorError, open_editor
 from .git_sync import GitSync, GitSyncError
 from .services.delete import delete_note as delete_note_workflow
-from .services.export import ExportError
-from .services.export import export_notes as run_export
+from .services.export import (
+    ExportError,
+    get_export_format_choices,
+    get_export_format_descriptions,
+)
+from .services.export import (
+    export_notes as run_export,
+)
 from .services.notes import (
     create_link_entry,
     create_log_entry,
@@ -78,6 +84,51 @@ def _get_app(ctx: click.Context) -> AppContext:
 
     ctx.obj["app"] = app
     return app
+
+
+class ExportFormatChoice(click.Choice):
+    """Dynamic choice list that introspects available exporter plugins."""
+
+    def __init__(self) -> None:
+        super().__init__(choices=(), case_sensitive=False)
+
+    def convert(self, value: str, param: click.Parameter, ctx: click.Context) -> str:
+        try:
+            app = _get_app(ctx)
+        except TerminotesCliError as exc:  # pragma: no cover - defensive
+            self.fail(str(exc), param, ctx)
+
+        try:
+            choices = get_export_format_choices(app.config)
+        except ExportError as exc:
+            self.fail(str(exc), param, ctx)
+
+        if not choices:
+            self.fail("No export formats are available.", param, ctx)
+
+        self.choices = tuple(choices)
+
+        try:
+            return super().convert(value, param, ctx)
+        except click.BadParameter:
+            try:
+                descriptions = get_export_format_descriptions(app.config)
+            except ExportError as exc:
+                self.fail(str(exc), param, ctx)
+
+            available = ", ".join(
+                f"{fmt} ({desc})" if desc else fmt for fmt, desc in descriptions
+            )
+            if available:
+                self.fail(
+                    f"Unknown export format '{value}'. Available: {available}.",
+                    param,
+                    ctx,
+                )
+            self.fail(f"Unknown export format '{value}'.", param, ctx)
+
+
+_EXPORT_FORMAT_TYPE = ExportFormatChoice()
 
 
 @cli.command(name="edit")
@@ -499,7 +550,7 @@ def search(
     "-f",
     "--format",
     "export_format",
-    type=str,
+    type=_EXPORT_FORMAT_TYPE,
     required=True,
     metavar="FORMAT",
     help="Export format identifier (Terminotes shows choices when validation fails).",
