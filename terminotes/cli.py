@@ -20,7 +20,6 @@ from .git_sync import GitSync, GitSyncError
 from .services.delete import delete_note as delete_note_workflow
 from .services.export import (
     ExportError,
-    get_export_format_choices,
     get_export_format_descriptions,
 )
 from .services.export import (
@@ -84,62 +83,6 @@ def _get_app(ctx: click.Context) -> AppContext:
 
     ctx.obj["app"] = app
     return app
-
-
-class ExportFormatOption(click.Option):
-    """Option that lazily resolves export format choices from plugins."""
-
-    def __init__(self, *args, **kwargs) -> None:  # type: ignore[override]
-        base_help = kwargs.get("help", "Export format identifier.")
-        self._base_help = base_help.rstrip(".") + "."
-        kwargs["type"] = click.Choice((), case_sensitive=False)
-        super().__init__(*args, **kwargs)
-
-    def _populate_choices(self, ctx: click.Context, *, strict: bool) -> None:
-        try:
-            app = _get_app(ctx)
-        except TerminotesCliError as exc:
-            if strict:
-                raise click.BadParameter(str(exc), ctx=ctx, param=self) from exc
-            return
-
-        try:
-            choices = get_export_format_choices(app.config)
-        except ExportError as exc:
-            if strict:
-                raise click.BadParameter(str(exc), ctx=ctx, param=self) from exc
-            return
-
-        if not choices:
-            if strict:
-                raise click.BadParameter(
-                    "No export formats are available.", ctx=ctx, param=self
-                )
-            return
-
-        self.type.choices = tuple(choices)
-
-        try:
-            descriptions = get_export_format_descriptions(app.config)
-        except ExportError:
-            descriptions = []
-
-        available = ", ".join(
-            f"{fmt} ({desc})" if desc else fmt for fmt, desc in descriptions
-        )
-        self.help = (
-            f"{self._base_help.rstrip('.')}. Available: {available}."
-            if available
-            else self._base_help
-        )
-
-    def handle_parse_result(self, ctx: click.Context, opts, args):  # type: ignore[override]
-        self._populate_choices(ctx, strict=not ctx.resilient_parsing)
-        return super().handle_parse_result(ctx, opts, args)
-
-    def get_help_record(self, ctx: click.Context):  # type: ignore[override]
-        self._populate_choices(ctx, strict=False)
-        return super().get_help_record(ctx)
 
 
 @cli.command(name="edit")
@@ -558,27 +501,62 @@ def search(
 
 @cli.command()
 @click.option(
+    "-l",
+    "--list-formats",
+    "list_formats",
+    is_flag=True,
+    help="List available export formats and exit.",
+)
+@click.option(
     "-f",
     "--format",
     "export_format",
-    cls=ExportFormatOption,
-    required=True,
+    type=str,
+    required=False,
     metavar="FORMAT",
-    help="Export format identifier (Terminotes shows choices when validation fails).",
+    help="Export format identifier.",
 )
 @click.option(
     "-d",
     "--dest",
     "destination",
     type=click.Path(path_type=Path, file_okay=False),
-    required=True,
+    required=False,
     help="Destination directory for the export",
 )
 @click.pass_context
-def export(ctx: click.Context, export_format: str, destination: Path) -> None:
+def export(
+    ctx: click.Context,
+    list_formats: bool,
+    export_format: str | None,
+    destination: Path | None,
+) -> None:
     """Export notes using the selected exporter plugin."""
 
     app: AppContext = _get_app(ctx)
+
+    if list_formats:
+        try:
+            descriptions = get_export_format_descriptions(app.config)
+        except ExportError as exc:
+            raise TerminotesCliError(str(exc)) from exc
+
+        if not descriptions:
+            click.echo("No export formats are available.")
+        else:
+            click.echo("Available export formats:\n")
+            for fmt, desc in descriptions:
+                if desc:
+                    click.echo(f"  - {fmt}: {desc}")
+                else:
+                    click.echo(f"  - {fmt}")
+        ctx.exit(0)
+
+    if export_format is None:
+        raise TerminotesCliError("Missing option '--format'.")
+
+    if destination is None:
+        raise TerminotesCliError("Missing option '--dest'.")
 
     if destination.exists() and destination.is_file():
         raise TerminotesCliError("Destination must be a directory path.")
