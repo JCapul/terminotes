@@ -26,7 +26,7 @@ def _write_config(base_dir: Path) -> Path:
 def _set_default_paths(config_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(config_module, "DEFAULT_CONFIG_PATH", config_path)
     monkeypatch.setattr(config_module, "DEFAULT_CONFIG_DIR", config_path.parent)
-    monkeypatch.setattr(cli, "DEFAULT_CONFIG_PATH", config_path)
+    monkeypatch.setattr(cli.config_cmd, "DEFAULT_CONFIG_PATH", config_path)
     # Avoid interacting with real git during CLI tests; skip local commits.
     monkeypatch.setattr(
         GitSync, "commit_db_update", lambda self, path, message=None: None

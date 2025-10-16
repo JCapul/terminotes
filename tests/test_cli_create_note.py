@@ -36,7 +36,7 @@ def _write_config(base_dir: Path, *, git_enabled: bool = True) -> Path:
 def _set_default_paths(config_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(config_module, "DEFAULT_CONFIG_PATH", config_path)
     monkeypatch.setattr(config_module, "DEFAULT_CONFIG_DIR", config_path.parent)
-    monkeypatch.setattr(cli, "DEFAULT_CONFIG_PATH", config_path)
+    monkeypatch.setattr(cli.config_cmd, "DEFAULT_CONFIG_PATH", config_path)
     # Avoid interacting with real git during CLI tests; skip local commits.
     monkeypatch.setattr(
         GitSync, "commit_db_update", lambda self, path, message=None: None
@@ -91,7 +91,7 @@ def test_new_command_creates_note_with_metadata(tmp_path, monkeypatch) -> None:
             "Body from editor. #til #python\n"
         )
 
-    monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
+    monkeypatch.setattr("terminotes.cli.edit.open_editor", fake_editor)
 
     runner = CliRunner()
     result = runner.invoke(cli.cli, ["edit"])
@@ -133,7 +133,7 @@ def test_new_command_respects_custom_timestamps(tmp_path, monkeypatch) -> None:
             "Body.\n"
         )
 
-    monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
+    monkeypatch.setattr("terminotes.cli.edit.open_editor", fake_editor)
 
     runner = CliRunner()
     result = runner.invoke(cli.cli, ["edit"])
@@ -183,7 +183,7 @@ def test_edit_command_updates_note_and_metadata(tmp_path, monkeypatch) -> None:
             "Updated body. #python\n"
         )
 
-    monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
+    monkeypatch.setattr("terminotes.cli.edit.open_editor", fake_editor)
 
     runner = CliRunner()
     result = runner.invoke(cli.cli, ["edit", "--id", str(note.id)])
@@ -233,7 +233,7 @@ def test_edit_command_auto_updates_last_edited_when_metadata_unchanged(
             metadata=parsed.metadata,
         )
 
-    monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
+    monkeypatch.setattr("terminotes.cli.edit.open_editor", fake_editor)
 
     runner = CliRunner()
     result = runner.invoke(cli.cli, ["edit", "--id", str(note.id)])
@@ -267,7 +267,7 @@ def test_edit_command_allows_changing_timestamps(tmp_path, monkeypatch) -> None:
             "Body updated. #til\n"
         )
 
-    monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
+    monkeypatch.setattr("terminotes.cli.edit.open_editor", fake_editor)
 
     runner = CliRunner()
     result = runner.invoke(cli.cli, ["edit", "--id", str(note.id)])
@@ -311,7 +311,7 @@ def test_edit_with_last_option_edits_last_updated(tmp_path, monkeypatch) -> None
             "First body updated via edit. #python\n"
         )
 
-    monkeypatch.setattr("terminotes.cli.open_editor", fake_editor)
+    monkeypatch.setattr("terminotes.cli.edit.open_editor", fake_editor)
 
     runner = CliRunner()
     result = runner.invoke(cli.cli, ["edit", "--last"])
@@ -356,7 +356,7 @@ def test_config_command_bootstraps_when_missing(tmp_path, monkeypatch) -> None:
             edited_paths.append(filename)
         return None
 
-    monkeypatch.setattr("terminotes.cli.click.edit", fake_edit)
+    monkeypatch.setattr("terminotes.cli.config_cmd.click.edit", fake_edit)
 
     runner = CliRunner()
     result = runner.invoke(
