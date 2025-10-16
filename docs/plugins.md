@@ -33,16 +33,15 @@ export formats. The plugin manager lives in `terminotes.plugins` and exposes the
 
 ## Hook contracts
 
-Terminotes currently defines two hook specifications in
+Terminotes currently defines one hook specification in
 `terminotes.plugins.spec`:
 
-- `bootstrap(config)` lets a plugin execute setup logic during
-  `terminotes.app.bootstrap`. The hook receives the loaded `TerminotesConfig`,
-  including the parsed `[plugins]` mapping for plugin-specific configuration
-  blocks.
-- `export_formats()` returns an iterable of `ExportContribution` descriptors.
-  The `formatter` callable receives keyword arguments `storage`, `destination`,
-  and optional `options`, writing notes to disk and returning the note count.
+- `export_formats(config)` returns an iterable of `ExportContribution`
+  descriptors. The hook receives the loaded `TerminotesConfig`, including the
+  parsed `[plugins]` mapping for plugin-specific configuration blocks. Each
+  contribution exposes a `formatter` callable that receives keyword arguments
+  `storage`, `destination`, and optional `options`, writing notes to disk and
+  returning the note count.
 
 See `terminotes.plugins.types` for the authoritative dataclasses and protocol
 signatures.
@@ -52,8 +51,8 @@ signatures.
 Plugin settings live under a `[plugins]` table in the main Terminotes TOML file.
 Each plugin should claim a unique nested table—usually the package name. For
 example, a plugin named `terminotes-export-aurora` would read from the section
-`[plugins."terminotes-export-aurora"]`. During bootstrap or export logic, plugins
-can access their configuration with `config.plugins.get(<plugin-id>, {})`.
+`[plugins."terminotes-export-aurora"]`. Plugins can access their configuration
+with `config.plugins.get(<plugin-id>, {})` inside their hook implementation.
 
 ## Built-in exporters
 
@@ -63,8 +62,8 @@ automatically during export discovery so the CLI can enumerate them for
 `tn export`. The HTML plugin reads its configuration from the table
 `[plugins."terminotes-html-plugin"]`, honouring keys such as `site_title` and an
 optional `templates_root`. When the section is absent, the plugin falls back to
-the configuration directory and ensures bundled templates exist during
-bootstrap.
+the configuration directory and ensures bundled templates exist each time the
+export hook runs.
 
 ## Next steps
 

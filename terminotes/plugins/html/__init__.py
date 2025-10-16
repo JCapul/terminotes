@@ -11,14 +11,13 @@ from .config import (
     templates_dir_from,
 )
 from .exporter import HtmlExporter
-from .plugin import bootstrap, export_formats
+from .plugin import export_formats
 
 __all__ = [
     "DEFAULT_SITE_TITLE",
     "HtmlExporter",
     "HtmlPluginConfig",
     "PLUGIN_ID",
-    "bootstrap",
     "ensure_templates",
     "export_formats",
     "resolve_plugin_config",

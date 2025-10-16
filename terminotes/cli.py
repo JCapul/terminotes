@@ -18,11 +18,7 @@ from .config import (
 from .editor import EditorError, open_editor
 from .git_sync import GitSync, GitSyncError
 from .services.delete import delete_note as delete_note_workflow
-from .services.export import (
-    ExportError,
-    get_export_format_choices,
-    get_export_format_descriptions,
-)
+from .services.export import ExportError
 from .services.export import export_notes as run_export
 from .services.notes import (
     create_link_entry,
@@ -35,15 +31,6 @@ from .storage import PruneResult, Storage, StorageError
 from .utils.datetime_fmt import parse_user_datetime, to_user_friendly_local
 
 CONTEXT_SETTINGS = {"help_option_names": ["-h", "--help"]}
-
-_EXPORT_FORMAT_CHOICES = get_export_format_choices()
-if _EXPORT_FORMAT_CHOICES:
-    _EXPORT_FORMAT_HELP = "Export format. Available: " + ", ".join(
-        f"{fmt} ({desc})" if desc else fmt
-        for fmt, desc in get_export_format_descriptions()
-    )
-else:
-    _EXPORT_FORMAT_HELP = "Export format."
 
 
 class TerminotesCliError(click.ClickException):
@@ -512,9 +499,10 @@ def search(
     "-f",
     "--format",
     "export_format",
-    type=click.Choice(_EXPORT_FORMAT_CHOICES, case_sensitive=False),
+    type=str,
     required=True,
-    help=_EXPORT_FORMAT_HELP,
+    metavar="FORMAT",
+    help="Export format identifier (Terminotes shows choices when validation fails).",
 )
 @click.option(
     "-d",
@@ -535,6 +523,7 @@ def export(ctx: click.Context, export_format: str, destination: Path) -> None:
 
     try:
         count = run_export(
+            app.config,
             app.storage,
             export_format=export_format,
             destination=destination,

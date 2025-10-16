@@ -5,9 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from .config import ConfigError, TerminotesConfig, load_config
+from .config import TerminotesConfig, load_config
 from .git_sync import GitSync
-from .plugins import run_bootstrap
 from .storage import DB_FILENAME, Storage
 
 
@@ -32,10 +31,5 @@ def bootstrap(config_path: Path | None, *, missing_hint: bool = False) -> AppCon
 
     storage = Storage(config.terminotes_dir / DB_FILENAME)
     storage.initialize()
-
-    try:
-        run_bootstrap(config)
-    except Exception as exc:  # pragma: no cover - defensive
-        raise ConfigError(f"Plugin bootstrap failed: {exc}") from exc
 
     return AppContext(config=config, storage=storage, git_sync=git_sync)

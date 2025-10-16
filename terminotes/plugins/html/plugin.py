@@ -49,18 +49,13 @@ def _export_html(
 
 
 @hookimpl
-def bootstrap(config: TerminotesConfig) -> None:
-    """Capture configuration and ensure templates before exporters run."""
+def export_formats(config: TerminotesConfig) -> tuple[ExportContribution, ...]:
+    """Expose the built-in HTML exporter as a plugin contribution."""
 
     global _current_config
     plugin_config = resolve_plugin_config(config)
     ensure_templates(plugin_config.templates_root)
     _current_config = plugin_config
-
-
-@hookimpl
-def export_formats() -> tuple[ExportContribution, ...]:
-    """Expose the built-in HTML exporter as a plugin contribution."""
 
     contribution = ExportContribution(
         format_id="html",
@@ -70,4 +65,4 @@ def export_formats() -> tuple[ExportContribution, ...]:
     return (contribution,)
 
 
-__all__ = ["PLUGIN_ID", "bootstrap", "export_formats"]
+__all__ = ["PLUGIN_ID", "export_formats"]

@@ -15,16 +15,11 @@ PLUGIN_ID = "terminotes-builtin-markdown"
 
 
 @hookimpl
-def bootstrap(config: TerminotesConfig) -> None:  # pragma: no cover - nothing to setup
-    """Markdown plugin currently has no bootstrap requirements."""
-
-    # Access the mapping to highlight where plugin-specific settings would live.
-    config.plugins.get(PLUGIN_ID, {})
-
-
-@hookimpl
-def export_formats() -> tuple[ExportContribution, ...]:
+def export_formats(config: TerminotesConfig) -> tuple[ExportContribution, ...]:
     """Expose the built-in Markdown exporter as a plugin contribution."""
+
+    # Touch plugin configuration to highlight where settings would be consumed.
+    config.plugins.get(PLUGIN_ID, {})
 
     contribution = ExportContribution(
         format_id="markdown",
@@ -47,4 +42,4 @@ def _export_markdown(
     )
 
 
-__all__ = ["PLUGIN_ID", "bootstrap", "export_formats"]
+__all__ = ["PLUGIN_ID", "export_formats"]

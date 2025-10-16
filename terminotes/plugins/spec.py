@@ -14,9 +14,5 @@ class TerminotesHookSpec:
     """Collection of pluggy hook specifications."""
 
     @hookspec
-    def bootstrap(self, config: TerminotesConfig) -> None:
-        """Run setup tasks during Terminotes bootstrap."""
-
-    @hookspec
-    def export_formats(self) -> Iterable[ExportContribution]:
+    def export_formats(self, config: TerminotesConfig) -> Iterable[ExportContribution]:
         """Return exporter contributions (format handlers) provided by the plugin."""

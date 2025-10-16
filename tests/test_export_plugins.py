@@ -6,6 +6,7 @@ import types
 from pathlib import Path
 
 import pytest
+from terminotes.config import TerminotesConfig
 from terminotes.plugins import ExportContribution, hookimpl
 from terminotes.plugins import manager as plugin_manager
 from terminotes.services import export as export_service
@@ -29,7 +30,7 @@ def test_export_notes_invokes_custom_plugin(tmp_path: Path, monkeypatch) -> None
     module = types.ModuleType("terminotes_test_plugin")
 
     @hookimpl
-    def export_formats() -> tuple[ExportContribution, ...]:
+    def export_formats(config) -> tuple[ExportContribution, ...]:
         def formatter(
             *,
             storage: Storage,
@@ -66,8 +67,17 @@ def test_export_notes_invokes_custom_plugin(tmp_path: Path, monkeypatch) -> None
     storage.initialize()
     storage.create_note("Example", "Body")
 
+    config = TerminotesConfig(
+        git_remote_url="file:///tmp/example.git",
+        terminotes_dir=tmp_path,
+        editor=None,
+        plugins={},
+        source_path=None,
+    )
+
     destination = tmp_path / "out"
     count = export_service.export_notes(
+        config,
         storage,
         export_format="dummy",
         destination=destination,
@@ -84,7 +94,7 @@ def test_export_notes_wraps_plugin_error(tmp_path: Path, monkeypatch) -> None:
     module = types.ModuleType("terminotes_failing_plugin")
 
     @hookimpl
-    def export_formats() -> tuple[ExportContribution, ...]:
+    def export_formats(config) -> tuple[ExportContribution, ...]:
         def formatter(
             *,
             storage: Storage,
@@ -115,8 +125,17 @@ def test_export_notes_wraps_plugin_error(tmp_path: Path, monkeypatch) -> None:
     storage = Storage(tmp_path / "notes.db")
     storage.initialize()
 
+    config = TerminotesConfig(
+        git_remote_url="file:///tmp/example.git",
+        terminotes_dir=tmp_path,
+        editor=None,
+        plugins={},
+        source_path=None,
+    )
+
     with pytest.raises(ExportError) as exc_info:
         export_service.export_notes(
+            config,
             storage,
             export_format="broken",
             destination=tmp_path / "out",

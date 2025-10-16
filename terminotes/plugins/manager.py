@@ -42,14 +42,14 @@ class TerminotesPluginManager:
     def load_entry_points(self, group: str = ENTRY_POINT_GROUP) -> None:
         self._manager.load_setuptools_entrypoints(group)
 
-    def iter_export_contributions(self) -> Iterator[ExportContribution]:
-        for contributions in self._manager.hook.export_formats():
+    def iter_export_contributions(
+        self,
+        config: TerminotesConfig,
+    ) -> Iterator[ExportContribution]:
+        for contributions in self._manager.hook.export_formats(config=config):
             if not contributions:
                 continue
             yield from _ensure_iterable(contributions)
-
-    def run_bootstrap(self, config: TerminotesConfig) -> None:
-        self._manager.hook.bootstrap(config=config)
 
 
 @lru_cache(maxsize=1)
@@ -74,10 +74,12 @@ def reset_plugin_manager_cache() -> None:
     _shared_plugin_manager.cache_clear()
 
 
-def load_export_contributions() -> dict[str, ExportContribution]:
+def load_export_contributions(
+    config: TerminotesConfig,
+) -> dict[str, ExportContribution]:
     manager = get_plugin_manager()
     contributions: dict[str, ExportContribution] = {}
-    for contribution in manager.iter_export_contributions():
+    for contribution in manager.iter_export_contributions(config):
         key = contribution.format_id.lower()
         if key in contributions:
             raise PluginRegistrationError(
@@ -85,11 +87,6 @@ def load_export_contributions() -> dict[str, ExportContribution]:
             )
         contributions[key] = contribution
     return contributions
-
-
-def run_bootstrap(config: TerminotesConfig) -> None:
-    manager = get_plugin_manager()
-    return manager.run_bootstrap(config)
 
 
 def _ensure_iterable(
@@ -123,5 +120,4 @@ __all__ = [
     "get_plugin_manager",
     "load_export_contributions",
     "reset_plugin_manager_cache",
-    "run_bootstrap",
 ]

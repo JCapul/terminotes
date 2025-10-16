@@ -9,7 +9,6 @@ from .manager import (
     get_plugin_manager,
     load_export_contributions,
     reset_plugin_manager_cache,
-    run_bootstrap,
 )
 from .types import ExportContribution
 
@@ -24,5 +23,4 @@ __all__ = [
     "hookspec",
     "load_export_contributions",
     "reset_plugin_manager_cache",
-    "run_bootstrap",
 ]
