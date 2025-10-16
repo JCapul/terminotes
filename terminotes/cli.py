@@ -86,49 +86,60 @@ def _get_app(ctx: click.Context) -> AppContext:
     return app
 
 
-class ExportFormatChoice(click.Choice):
-    """Dynamic choice list that introspects available exporter plugins."""
+class ExportFormatOption(click.Option):
+    """Option that lazily resolves export format choices from plugins."""
 
-    def __init__(self) -> None:
-        super().__init__(choices=(), case_sensitive=False)
+    def __init__(self, *args, **kwargs) -> None:  # type: ignore[override]
+        base_help = kwargs.get("help", "Export format identifier.")
+        self._base_help = base_help.rstrip(".") + "."
+        kwargs["type"] = click.Choice((), case_sensitive=False)
+        super().__init__(*args, **kwargs)
 
-    def convert(self, value: str, param: click.Parameter, ctx: click.Context) -> str:
+    def _populate_choices(self, ctx: click.Context, *, strict: bool) -> None:
         try:
             app = _get_app(ctx)
-        except TerminotesCliError as exc:  # pragma: no cover - defensive
-            self.fail(str(exc), param, ctx)
+        except TerminotesCliError as exc:
+            if strict:
+                raise click.BadParameter(str(exc), ctx=ctx, param=self) from exc
+            return
 
         try:
             choices = get_export_format_choices(app.config)
         except ExportError as exc:
-            self.fail(str(exc), param, ctx)
+            if strict:
+                raise click.BadParameter(str(exc), ctx=ctx, param=self) from exc
+            return
 
         if not choices:
-            self.fail("No export formats are available.", param, ctx)
+            if strict:
+                raise click.BadParameter(
+                    "No export formats are available.", ctx=ctx, param=self
+                )
+            return
 
-        self.choices = tuple(choices)
+        self.type.choices = tuple(choices)
 
         try:
-            return super().convert(value, param, ctx)
-        except click.BadParameter:
-            try:
-                descriptions = get_export_format_descriptions(app.config)
-            except ExportError as exc:
-                self.fail(str(exc), param, ctx)
+            descriptions = get_export_format_descriptions(app.config)
+        except ExportError:
+            descriptions = []
 
-            available = ", ".join(
-                f"{fmt} ({desc})" if desc else fmt for fmt, desc in descriptions
-            )
-            if available:
-                self.fail(
-                    f"Unknown export format '{value}'. Available: {available}.",
-                    param,
-                    ctx,
-                )
-            self.fail(f"Unknown export format '{value}'.", param, ctx)
+        available = ", ".join(
+            f"{fmt} ({desc})" if desc else fmt for fmt, desc in descriptions
+        )
+        self.help = (
+            f"{self._base_help.rstrip('.')}. Available: {available}."
+            if available
+            else self._base_help
+        )
 
+    def handle_parse_result(self, ctx: click.Context, opts, args):  # type: ignore[override]
+        self._populate_choices(ctx, strict=not ctx.resilient_parsing)
+        return super().handle_parse_result(ctx, opts, args)
 
-_EXPORT_FORMAT_TYPE = ExportFormatChoice()
+    def get_help_record(self, ctx: click.Context):  # type: ignore[override]
+        self._populate_choices(ctx, strict=False)
+        return super().get_help_record(ctx)
 
 
 @cli.command(name="edit")
@@ -550,7 +561,7 @@ def search(
     "-f",
     "--format",
     "export_format",
-    type=_EXPORT_FORMAT_TYPE,
+    cls=ExportFormatOption,
     required=True,
     metavar="FORMAT",
     help="Export format identifier (Terminotes shows choices when validation fails).",
