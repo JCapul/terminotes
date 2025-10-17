@@ -1,6 +1,6 @@
 # Repository Guidelines
 
-Terminotes is a released Python CLI (current version 0.3.0) for jotting quick notes from the terminal. Notes live in SQLite, optional git synchronization keeps the database portable, and editor payloads now use YAML front matter. This guide keeps contributors aligned as we iterate post-release.
+Terminotes is a released Python CLI (current version 0.6.2) for jotting quick notes from the terminal. Notes live in SQLite, optional git synchronization keeps the database portable, and editor payloads now use YAML front matter. This guide keeps contributors aligned as we iterate post-release.
 
 ## Project Structure & Module Organization
 - Place runtime code under `terminotes/`, grouping modules by concern (`cli.py` for argument parsing, `editor.py` for editor launch, `storage.py` for SQLite, `git_sync.py` for git sync duties).
@@ -51,6 +51,6 @@ Terminotes is a released Python CLI (current version 0.3.0) for jotting quick no
 - Validate tag configuration before use, parameterize SQL queries, and sanitize YAML-bound metadata (PyYAML loaders must remain safe).
 
 ## Pre-release Compatibility
-- The project remains <1.0, but 0.3.0 is published. Preserve observable behavior when practical, especially for YAML front matter and exported templates.
+- The project remains <1.0, but 0.6.2 is published. Preserve observable behavior when practical, especially for YAML front matter and exported templates.
 - We may still rename config keys and APIs as needed. Prefer additive migrations and document breaking changes in `CHANGELOG.md`.
 - The `notes.extra_data` column is now part of the schema; coordinate migrations and ensure backward compatibility with existing databases when introducing new shapes.
